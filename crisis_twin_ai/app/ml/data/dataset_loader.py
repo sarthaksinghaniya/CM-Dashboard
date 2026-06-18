@@ -1,44 +1,115 @@
 import os
+import pandas as pd
 from datasets import load_dataset
 
 # Define paths relative to this script
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 RAW_DATA_DIR = os.path.join(BASE_DIR, "raw")
 
+DATASETS_CONFIG = [
+    {
+        "name": "ttxy/tweet_disaster", # Replacing disaster_tweets since it is inaccessible
+        "text_col": "text",
+        "label_col": "target"
+    },
+    {
+        "name": "tweet_eval", # Simulating crisis_nlp / sentiment 
+        "subset": "sentiment",
+        "text_col": "text",
+        "label_col": "label"
+    },
+    {
+        "name": "dair-ai/emotion", # Additional small text dataset
+        "text_col": "text",
+        "label_col": "label"
+    }
+]
+
+def load_multiple_datasets() -> list:
+    """
+    Loads multiple datasets using the HuggingFace datasets library, 
+    converts them to pandas DataFrames, normalizes columns to 'text' and 'label',
+    adds a 'source' column, and returns a list of DataFrames.
+    """
+    all_dfs = []
+    
+    for config in DATASETS_CONFIG:
+        ds_name = config["name"]
+        subset = config.get("subset", None)
+        print(f"\nFetching dataset: {ds_name}...")
+        
+        try:
+            if subset:
+                dataset = load_dataset(ds_name, subset)
+            else:
+                dataset = load_dataset(ds_name)
+        except Exception as e:
+            print(f"Error loading {ds_name}: {e}")
+            continue
+            
+        ds_dfs = []
+        for split_name in dataset.keys():
+            # Convert to Pandas DataFrame
+            df = dataset[split_name].to_pandas()
+            text_col = config["text_col"]
+            label_col = config["label_col"]
+            
+            if text_col in df.columns and label_col in df.columns:
+                # Normalize columns
+                df = df[[text_col, label_col]].copy()
+                df.rename(columns={text_col: "text", label_col: "label"}, inplace=True)
+                
+                # Add source dataset column
+                df["source"] = ds_name
+                df["original_split"] = split_name
+                
+                ds_dfs.append(df)
+                print(f"  - [{split_name.upper()}] Loaded {len(df)} rows.")
+            else:
+                print(f"  - [{split_name.upper()}] Skipping (missing required columns).")
+                
+        if ds_dfs:
+            combined_ds_df = pd.concat(ds_dfs, ignore_index=True)
+            all_dfs.append(combined_ds_df)
+            
+    return all_dfs
+
 def load_and_save_dataset():
     """
-    Downloads the dataset from Hugging Face and saves the splits locally as CSV files.
+    Wrapper function to keep the pipeline intact. 
+    Calls load_multiple_datasets, merges the results, and saves them locally.
     """
-    print("Initializing Dataset Loader...")
-    
-    try:
-        # Load the dataset
-        print("Fetching dataset 'disaster_tweets' from Hugging Face...")
-        dataset = load_dataset("disaster_tweets")
-    except Exception as e:
-        print(f"Error loading 'disaster_tweets': {e}")
-        # Fallback to a known valid repository if the exact string fails
-        print("Falling back to 'ttxy/tweet_disaster'...")
-        dataset = load_dataset("ttxy/tweet_disaster")
-
-    # Ensure the target directory exists
+    print("Initializing Multi-Dataset Loader...")
     os.makedirs(RAW_DATA_DIR, exist_ok=True)
-
-    # Process and save each split (train, test, validation, etc.)
-    for split_name in dataset.keys():
-        split_data = dataset[split_name]
+    
+    list_of_dfs = load_multiple_datasets()
+    
+    if not list_of_dfs:
+        print("Error: No datasets were successfully loaded.")
+        return
         
-        # 1. Logging dataset size
-        print(f"\n--- {split_name.upper()} SPLIT ---")
-        print(f"Dataset Size: {len(split_data)} records")
+    # Combine all datasets from the list
+    master_df = pd.concat(list_of_dfs, ignore_index=True)
+    
+    # Save splits based on their original split designations
+    train_df = master_df[master_df['original_split'].isin(['train', 'validation', 'dev'])]
+    test_df = master_df[master_df['original_split'] == 'test']
+    
+    if test_df.empty:
+        train_df = master_df # Fallback if no specific test split exists
         
-        # 2. Logging a sample row
-        print(f"Sample Row: {split_data[0]}")
-        
-        # 3. Saving locally as CSV
-        save_path = os.path.join(RAW_DATA_DIR, f"{split_name}.csv")
-        split_data.to_csv(save_path, index=False)
-        print(f"Saved {split_name} data to -> {save_path}")
+    print(f"\n--- TOTAL TRAIN SPLIT ---")
+    print(f"Combined Size: {len(train_df)} records")
+    train_path = os.path.join(RAW_DATA_DIR, "train.csv")
+    train_df.to_csv(train_path, index=False)
+    print(f"Saved train data to -> {train_path}")
+    
+    if not test_df.empty:
+        print(f"\n--- TOTAL TEST SPLIT ---")
+        print(f"Combined Size: {len(test_df)} records")
+        test_path = os.path.join(RAW_DATA_DIR, "test.csv")
+        test_df.to_csv(test_path, index=False)
+        print(f"Saved test data to -> {test_path}")
 
 if __name__ == "__main__":
     load_and_save_dataset()
