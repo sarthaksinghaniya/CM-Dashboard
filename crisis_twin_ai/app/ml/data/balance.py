@@ -1,61 +1,74 @@
 import os
-import json
 import pandas as pd
-import numpy as np
-from sklearn.utils.class_weight import compute_class_weight
+from sklearn.utils import resample
 
 # Define paths relative to this script
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROCESSED_DATA_DIR = os.path.join(BASE_DIR, "processed")
 MERGED_DATASET_PATH = os.path.join(PROCESSED_DATA_DIR, "merged_dataset.csv")
-WEIGHTS_PATH = os.path.join(PROCESSED_DATA_DIR, "class_weights.json")
+BALANCED_DATASET_PATH = os.path.join(PROCESSED_DATA_DIR, "merged_balanced.csv")
 
-def calculate_class_weights():
+def balance_dataset():
     """
-    Loads the merged dataset and uses sklearn to compute balanced class weights,
-    saving the result to a JSON file to be used during model training.
+    Loads the merged dataset, separates majority and minority classes,
+    oversamples the minority class until balanced, shuffles the result,
+    and saves it to a new CSV file.
     """
     if not os.path.exists(MERGED_DATASET_PATH):
         print(f"Error: Merged dataset not found at {MERGED_DATASET_PATH}")
         print("Please run 'run_pipeline.py' first.")
         return
 
-    print("Loading merged dataset to compute class weights...")
+    print("Loading merged dataset to perform oversampling...")
     df = pd.read_csv(MERGED_DATASET_PATH)
     
     if "label" not in df.columns:
         print("Error: 'label' column is missing from the dataset.")
         return
         
-    # Extract label array and find unique classes
-    labels = df["label"].values
-    unique_classes = np.unique(labels)
+    print(f"Original Dataset Size: {len(df)}")
+    original_dist = df["label"].value_counts().to_dict()
+    print("Original Distribution:")
+    for cls, count in original_dist.items():
+        print(f"  - Label {cls}: {count}")
+        
+    # 1. Separate minority and majority classes
+    majority_class_label = max(original_dist, key=original_dist.get)
+    minority_class_label = min(original_dist, key=original_dist.get)
     
-    # Use sklearn to magically compute perfectly balanced weights
-    # 'balanced' setting uses the formula: n_samples / (n_classes * np.bincount(y))
-    weights = compute_class_weight(class_weight='balanced', classes=unique_classes, y=labels)
+    df_majority = df[df["label"] == majority_class_label]
+    df_minority = df[df["label"] == minority_class_label]
     
-    # Generate dictionary mapping class label to weight (e.g. {"0": 1.5, "1": 0.8})
-    class_weights_dict = {
-        str(int(cls)): round(float(weight), 4) 
-        for cls, weight in zip(unique_classes, weights)
-    }
+    # 2. Duplicate minority samples until balanced
+    print("\nOversampling minority class to match majority...")
+    df_minority_oversampled = resample(
+        df_minority, 
+        replace=True,                  # Sample with replacement for oversampling
+        n_samples=len(df_majority),    # Match the count of the majority class
+        random_state=42                # Ensure reproducibility
+    )
     
+    # Combine the untouched majority class with the duplicated minority class
+    df_balanced = pd.concat([df_majority, df_minority_oversampled])
+    
+    # 3. Shuffle dataset
+    print("Shuffling balanced dataset...")
+    df_balanced = df_balanced.sample(frac=1, random_state=42).reset_index(drop=True)
+    
+    # 4. Print new class distribution
     print("\n" + "="*40)
-    print("COMPUTED CLASS WEIGHTS")
+    print("NEW CLASS DISTRIBUTION")
     print("="*40)
-    for cls, weight in class_weights_dict.items():
-        print(f"Label {cls}: {weight}")
+    print(f"Total Size: {len(df_balanced)} records")
+    new_dist = df_balanced["label"].value_counts().to_dict()
+    for cls, count in new_dist.items():
+        print(f"  - Label {cls}: {count}")
     print("="*40 + "\n")
     
-    # Save the generated weights configuration
-    try:
-        os.makedirs(PROCESSED_DATA_DIR, exist_ok=True)
-        with open(WEIGHTS_PATH, "w") as f:
-            json.dump(class_weights_dict, f, indent=4)
-        print(f"Saved class weights to -> {WEIGHTS_PATH}")
-    except Exception as e:
-        print(f"Failed to save JSON weights: {e}")
+    # 5. Save new dataset
+    os.makedirs(PROCESSED_DATA_DIR, exist_ok=True)
+    df_balanced.to_csv(BALANCED_DATASET_PATH, index=False)
+    print(f"Saved perfectly balanced dataset to -> {BALANCED_DATASET_PATH}")
 
 if __name__ == "__main__":
-    calculate_class_weights()
+    balance_dataset()
