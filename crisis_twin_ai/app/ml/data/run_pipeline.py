@@ -7,8 +7,9 @@ project_root = os.path.abspath(os.path.join(current_dir, "../../.."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from app.ml.data.dataset_loader import load_and_save_dataset
-from app.ml.data.preprocess import preprocess_dataset
+from app.ml.data.dataset_loader import load_multiple_datasets
+from app.ml.data.normalize import normalize_dataset
+from app.ml.data.merge import merge_datasets
 
 def main():
     print("=" * 50)
@@ -16,13 +17,40 @@ def main():
     print("=" * 50)
     
     try:
-        print("\nDownloading dataset...")
-        load_and_save_dataset()
+        # Step 1: Load multiple datasets
+        print("\n[1/3] Loading datasets from remote sources...")
+        raw_datasets = load_multiple_datasets()
         
-        print("\nPreprocessing dataset...")
-        preprocess_dataset()
+        if not raw_datasets:
+            print("Error: No datasets were loaded. Exiting.")
+            sys.exit(1)
+            
+        # Step 2: Normalize each dataset individually
+        print(f"\n[2/3] Normalizing {len(raw_datasets)} dataset chunks...")
+        normalized_datasets = []
         
-        print("\nDone! The dataset is ready for training.")
+        for i, df in enumerate(raw_datasets):
+            if df.empty:
+                continue
+                
+            # Grab the source name that the loader attached, or use a fallback
+            source_name = df["source"].iloc[0] if "source" in df.columns else f"unknown_source_{i}"
+            print(f"  -> Normalizing chunk from: {source_name}")
+            
+            clean_df = normalize_dataset(df, source_name)
+            
+            if not clean_df.empty:
+                normalized_datasets.append(clean_df)
+                
+        if not normalized_datasets:
+            print("Error: All datasets were empty after normalization. Exiting.")
+            sys.exit(1)
+            
+        # Step 3: Merge all normalized datasets
+        print("\n[3/3] Merging normalized datasets into a single unified source...")
+        merged_df = merge_datasets(normalized_datasets)
+        
+        print("\nDone! Full dataset pipeline executed successfully.")
         
     except Exception as e:
         print(f"\nPipeline failed with an unexpected error: {e}")
