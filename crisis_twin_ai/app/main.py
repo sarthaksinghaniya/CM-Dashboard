@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from app.core.config import settings
+from app.api.routes import auth
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -11,6 +12,4 @@ app = FastAPI(
 def root():
     return {"message": "Welcome to Crisis Twin AI API"}
 
-# Example of including an API router
-# from app.api.routes import users
-# app.include_router(users.router, prefix=settings.API_V1_STR + "/users", tags=["users"])
+app.include_router(auth.router, prefix=settings.API_V1_STR, tags=["login"])
