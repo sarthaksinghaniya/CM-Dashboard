@@ -5,7 +5,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Form, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, Form, UploadFile, File, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -17,6 +17,8 @@ from app.schemas.complaint import ComplaintSubmissionResponse, CrisisCreate, Cri
 from app.services.ml.inference import MLInferenceService
 from app.services.email.smtp import async_send_complaint_acknowledgement_email
 from app.services.storage.attachment import AttachmentService
+from app.services.routing.engine import RoutingEngine
+from app.services.notification.service import NotificationService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -45,6 +47,7 @@ def get_department_for_category(category: str) -> str:
 
 @router.post("/", response_model=ComplaintSubmissionResponse, status_code=status.HTTP_201_CREATED)
 async def submit_complaint(
+    background_tasks: BackgroundTasks,
     citizen_name: str = Form(...),
     citizen_email: str = Form(...),
     citizen_phone: str = Form(...),
@@ -107,11 +110,14 @@ async def submit_complaint(
     # 3. Auto-Classification Fallback
     ml_service = MLInferenceService()
     final_category = category
+    confidence_score = 1.0
+    
     if not final_category or not final_category.strip():
         # Classify using fine-tuned model
         ml_res = ml_service.predict(description)
         predicted_labels = ml_res.get("category_pred", ["OTHER"])
         final_category = predicted_labels[0] if predicted_labels else "OTHER"
+        confidence_score = ml_res.get("confidence_score", 0.5)
     
     final_category = final_category.strip()
 
@@ -121,6 +127,11 @@ async def submit_complaint(
 
     # Map department
     final_department = get_department_for_category(final_category)
+
+    # 3.5. Route Complaint
+    assigned_to = None
+    if confidence_score >= 0.7:
+        assigned_to = await RoutingEngine.route_complaint(final_category, district, db)
 
     # 4. Generate Ticket ID sequentially
     current_year = datetime.now().year
@@ -153,7 +164,8 @@ async def submit_complaint(
         department=final_department,
         district=district,
         priority=final_priority,
-        status=ComplaintStatus.OPEN
+        status=ComplaintStatus.OPEN,
+        assigned_to=assigned_to
     )
 
     uploaded_attachments = []
@@ -212,6 +224,19 @@ async def submit_complaint(
         )
     except Exception as email_err:
         logger.error(f"Non-blocking email delivery failure for ticket {ticket_id}: {email_err}")
+
+    # 6.5 Async App Notification for Assignment
+    if assigned_to is not None:
+        NotificationService.trigger_notification(
+            db=db,
+            background_tasks=background_tasks,
+            user_id=assigned_to,
+            title="New Complaint Assigned",
+            message=f"Ticket {ticket_id} has been assigned to you.",
+            type="complaint_assigned",
+            reference_id=str(db_complaint.id),
+            action_url=f"/complaints/{ticket_id}"
+        )
 
     # 7. Response
     return ComplaintSubmissionResponse(
