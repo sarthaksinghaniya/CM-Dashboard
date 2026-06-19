@@ -91,3 +91,33 @@ class MLInferenceService:
             "category_pred": ["OTHER"],
             "confidence_score": 0.5
         }
+
+    def predict_severity(self, text: str) -> str:
+        """
+        Runs the severity classifier on the provided text.
+        Returns predicted severity (LOW, MEDIUM, HIGH, CRITICAL).
+        """
+        try:
+            embeddings = self.get_embeddings(text)
+            if not embeddings:
+                return "LOW"
+                
+            X_input = np.array([embeddings])
+            model = self.loader.get_severity_model()
+            encoders = self.loader.get_encoders()
+            
+            if not model or not encoders or 'severity' not in encoders:
+                logger.warning("Severity model not fully loaded. Returning fallback 'LOW'.")
+                return "LOW"
+
+            pred_idx = model.predict(X_input)[0]
+            pred_label = encoders['severity'].inverse_transform([pred_idx])[0]
+            val = str(pred_label).upper()
+            
+            from app.models.complaint import PriorityEnum
+            if val in PriorityEnum.__members__:
+                return val
+            return "LOW"
+        except Exception as e:
+            logger.error(f"Severity prediction error: {e}")
+            return "LOW"

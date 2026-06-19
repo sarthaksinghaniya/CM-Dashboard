@@ -1,30 +1,53 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, EmailStr
 from datetime import datetime
-from app.models.complaint import SeverityEnum, StatusEnum
+from typing import Optional, List
+from app.models.complaint import PriorityEnum, ComplaintStatus
 
-class CrisisBase(BaseModel):
+class ComplaintBase(BaseModel):
     title: str
-    description: str | None = None
-    severity: SeverityEnum = SeverityEnum.low
-    location: str
-    status: StatusEnum = StatusEnum.active
+    description: Optional[str] = None
+    category: str
+    department: str
+    district: str
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    priority: PriorityEnum = PriorityEnum.LOW
+    status: ComplaintStatus = ComplaintStatus.OPEN
 
-class CrisisCreate(CrisisBase):
-    pass
+class CrisisCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    category: str
+    department: str
+    district: str
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    priority: Optional[PriorityEnum] = PriorityEnum.LOW
+    status: Optional[ComplaintStatus] = ComplaintStatus.OPEN
 
 class CrisisUpdate(BaseModel):
-    title: str | None = None
-    description: str | None = None
-    severity: SeverityEnum | None = None
-    location: str | None = None
-    status: StatusEnum | None = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    department: Optional[str] = None
+    district: Optional[str] = None
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    priority: Optional[PriorityEnum] = None
+    status: Optional[ComplaintStatus] = None
 
-class CrisisInDBBase(CrisisBase):
+class Complaint(ComplaintBase):
     id: int
-    created_by: int
+    ticket_id: str
+    citizen_name: Optional[str] = None
+    citizen_email: Optional[str] = None
+    citizen_phone: Optional[str] = None
     created_at: datetime
+    updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
-class Complaint(CrisisInDBBase):
-    pass
+class ComplaintSubmissionResponse(BaseModel):
+    ticket_id: str
+    status: str
+    estimated_sla: str

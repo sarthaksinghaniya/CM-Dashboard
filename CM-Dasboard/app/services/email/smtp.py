@@ -60,3 +60,34 @@ async def async_send_otp_email(email_to: str, otp: str) -> None:
     </html>
     """
     await asyncio.to_thread(sync_send_email, email_to, subject, html_content)
+
+async def async_send_complaint_acknowledgement_email(
+    email_to: str,
+    citizen_name: str,
+    ticket_id: str,
+    status: str,
+    estimated_sla: str
+) -> None:
+    """
+    Async wrapping of the complaint acknowledgement email dispatch.
+    """
+    subject = f"Grievance Lodged Successfully - Ticket {ticket_id}"
+    html_content = f"""
+    <html>
+        <body style="font-family: Arial, sans-serif; padding: 20px; line-height: 1.6;">
+            <h2 style="color: #0b3c5d;">Delhi Chief Minister's Office</h2>
+            <h3 style="color: #5cb85c;">Grievance Registration Acknowledgement</h3>
+            <p>Dear {citizen_name},</p>
+            <p>Thank you for reaching out to the Chief Minister's Office. Your grievance has been registered successfully.</p>
+            <div style="background-color: #f5f7fa; border-radius: 4px; padding: 15px; margin: 20px 0; border-left: 5px solid #0b3c5d;">
+                <strong>Ticket ID:</strong> {ticket_id}<br>
+                <strong>Status:</strong> {status}<br>
+                <strong>Estimated SLA:</strong> {estimated_sla}
+            </div>
+            <p>You can track the progress of your grievance using the Ticket ID provided above.</p>
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+            <p style="font-size: 12px; color: #999; text-align: center;">Government of National Capital Territory of Delhi &copy; 2026</p>
+        </body>
+    </html>
+    """
+    await asyncio.to_thread(sync_send_email, email_to, subject, html_content)
