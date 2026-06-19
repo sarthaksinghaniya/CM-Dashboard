@@ -1,5 +1,5 @@
 from typing import Annotated, Any, Union
-from fastapi import Depends, HTTPException, status, Security
+from fastapi import Depends, HTTPException, status, Security, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError, ExpiredSignatureError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,16 +29,23 @@ class Admin:
 SessionDep = Annotated[AsyncSession, Depends(get_db)]
 TokenDep = Annotated[HTTPAuthorizationCredentials, Depends(security_scheme)]
 
-async def get_current_user(db: SessionDep, token_credentials: TokenDep) -> User:
+async def get_current_user(db: SessionDep, request: Request, token_credentials: TokenDep) -> User:
     # 1. Check if token credentials are provided
     if not token_credentials:
+        auth_header = request.headers.get("Authorization")
+        if auth_header:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication scheme. Bearer expected.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing Authorization Header",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # 2. Check token schema is Bearer
+    # 2. Check token scheme is Bearer
     if token_credentials.scheme.lower() != "bearer":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
