@@ -1,0 +1,46 @@
+{
+  "system": {
+    "project_name": "CM-Dashboard",
+    "version": "1.0.0",
+    "environment": "production",
+    "log_level": "INFO"
+  },
+  "data_pipeline": {
+    "raw_data_dir": "app/ml/data/raw",
+    "processed_data_dir": "app/ml/data/processed",
+    "test_size": 0.2,
+    "stratified_split": true,
+    "use_smote": true
+  },
+  "model_training": {
+    "model_type": "hybrid_xgb_pytorch",
+    "use_focal_loss": true,
+    "apply_gradient_clipping": true,
+    "early_stopping_patience": 5,
+    "learning_rate": 0.001
+  },
+  "paths": {
+    "model_output_dir": "app/ml/models",
+    "metrics_output_dir": "outputs"
+  },
+  "agents": {
+    "negotiation_max_iterations": 2,
+    "default_resolution_strategy": "highest_confidence"
+  },
+  "rag_memory": {
+    "faiss_embedding_dim": 384,
+    "model_name": "sentence-transformers/all-MiniLM-L6-v2",
+    "top_k_retrieve": 3
+  },
+  "reinforcement_learning": {
+    "enabled": true,
+    "ledger_path": "outputs/feedback_ledger.json",
+    "dynamic_policies": true,
+    "rewards": {
+      "correct": 1.0,
+      "wrong": -1.0,
+      "high_confidence_wrong": -2.0,
+      "rag_bonus": 0.5
+    }
+  }
+}

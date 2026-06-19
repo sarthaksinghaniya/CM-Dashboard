@@ -1,5 +1,7 @@
 import threading
 import logging
+import joblib
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -14,43 +16,50 @@ class ModelLoader:
         with cls._lock:
             if not cls._instance:
                 cls._instance = super(ModelLoader, cls).__new__(cls)
-                cls._instance._model = None
-                cls._instance._tokenizer = None
+                cls._instance._classifier = None
+                cls._instance._severity_model = None
+                cls._instance._encoders = None
                 cls._instance._is_loaded = False
         return cls._instance
         
-    def load_model(self, model_name_or_path: str = "bert-base-uncased"):
+    def load_models(self, models_dir: str = "app/ml/models"):
         """
-        Loads the model and tokenizer into memory.
+        Loads the trained models and encoders into memory.
         """
         with self._lock:
             if self._is_loaded:
                 return
                 
             try:
-                # In a real scenario, you would import transformers and load models here:
-                # from transformers import AutoModel, AutoTokenizer
-                # self._tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
-                # self._model = AutoModel.from_pretrained(model_name_or_path)
+                clf_path = os.path.join(models_dir, 'classifier.pkl')
+                sev_path = os.path.join(models_dir, 'severity.pkl')
+                enc_path = os.path.join(models_dir, 'encoders.pkl')
                 
-                # Placeholder for actual model object
-                self._model = f"MockModel({model_name_or_path})"
-                self._tokenizer = f"MockTokenizer({model_name_or_path})"
+                if not os.path.exists(clf_path):
+                    logger.warning(f"Models not found at {models_dir}. Ensure training has completed.")
+                    return
+                
+                self._classifier = joblib.load(clf_path)
+                self._severity_model = joblib.load(sev_path)
+                self._encoders = joblib.load(enc_path)
                 
                 self._is_loaded = True
-                logger.info(f"Model '{model_name_or_path}' loaded successfully.")
+                logger.info("Fine-tuned models loaded successfully.")
             except Exception as e:
-                logger.error(f"Error loading model '{model_name_or_path}': {e}")
+                logger.error(f"Error loading models: {e}")
                 raise e
             
-    def get_model(self):
-        """Returns the loaded model instance."""
+    def get_classifier(self):
         if not self._is_loaded:
-            self.load_model()
-        return self._model
+            self.load_models()
+        return self._classifier
         
-    def get_tokenizer(self):
-        """Returns the loaded tokenizer instance."""
+    def get_severity_model(self):
         if not self._is_loaded:
-            self.load_model()
-        return self._tokenizer
+            self.load_models()
+        return self._severity_model
+        
+    def get_encoders(self):
+        if not self._is_loaded:
+            self.load_models()
+        return self._encoders

@@ -1,26 +1,8 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Environments
+*.pkl
 .env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# ML Data folders (we don't want to commit heavy CSVs)
-crisis_twin_ai/app/ml/data/raw/
-crisis_twin_ai/app/ml/data/processed/
-*.csv
-
-# IDEs
-.vscode/
-.idea/
-
-# ML data
-*.npy
-app/ml/data/
+__pycache__/
+*.pyc
+logs/
+outputs/
+faiss_db/*.npy
+app/ml/data/processed/*.csv

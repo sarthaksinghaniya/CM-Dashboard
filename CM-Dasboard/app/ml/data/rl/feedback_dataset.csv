@@ -1,0 +1,9 @@
+text,category,severity,sample_weight
+"Gas leak in sector 4, strong smell reported.",HAZMAT,CRITICAL,4.0
+"Minor earthquake felt downtown, some windows broken.",EARTHQUAKE,MEDIUM,4.0
+"The main water pipe burst on 5th avenue, flooding the street and leaving us with dry taps.",EARTHQUAKE,MEDIUM,4.0
+"The main water pipe burst on 5th avenue, flooding the street and shorting out the local electricity grid. We have no power and no water.",EARTHQUAKE,MEDIUM,4.0
+"The main water pipe burst downtown, flooding the street and shorting out the local electricity grid. We have no power and no water.",EARTHQUAKE,MEDIUM,4.0
+"The main water pipe burst downtown, flooding the street and shorting out the local electricity grid. We have no power and no water.",EARTHQUAKE,MEDIUM,4.0
+"The main water pipe burst downtown, flooding the street and shorting out the local electricity grid. We have no power and no water.",EARTHQUAKE,MEDIUM,4.0
+"The main water pipe burst downtown, flooding the street and shorting out the local electricity grid. We have no power and no water.",EARTHQUAKE,MEDIUM,4.0

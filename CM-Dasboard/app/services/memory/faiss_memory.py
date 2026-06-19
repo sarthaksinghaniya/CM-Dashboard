@@ -1,7 +1,10 @@
 import numpy as np
 import faiss
+import logging
 from typing import List, Dict, Any
 from app.services.memory.embedding import MemoryEmbeddingService
+
+logger = logging.getLogger(__name__)
 
 class FaissMemory:
     """
@@ -30,44 +33,66 @@ class FaissMemory:
         """
         Generates embeddings for the text and stores it in the FAISS index.
         """
-        # 1. Convert text to embeddings
         vec = self.embedding.embed(text).reshape(1, -1)
-        
-        # 2. Add to FAISS index
         self.index.add(vec)
-        
-        # 3. Map embedding to metadata
         self.metadata_store[self._current_id] = {
             "text": text,
+            "deprecated": False,
             **(metadata or {})
         }
         self._current_id += 1
-        
         return True
+        
+    def apply_rl_reward(self, text: str, reward: float, metadata: Dict[str, Any] = None):
+        """
+        Adjusts memory persistence based on RL reward.
+        If reward is very high, we duplicate the vector slightly offset to boost it.
+        If reward is low, we flag it as deprecated so it is filtered from results.
+        """
+        if reward <= -1.0:
+            # We must search and deprecate the matching incident
+            vec = self.embedding.embed(text).reshape(1, -1)
+            D, I = self.index.search(vec, 1)
+            idx = int(I[0][0])
+            if idx != -1 and idx in self.metadata_store:
+                self.metadata_store[idx]["deprecated"] = True
+                logger.info(f"RL Loop: Deprecated bad memory [ID: {idx}] due to negative reward.")
+        elif reward >= 1.0:
+            # Boost the memory by adding it explicitly as a corrected standard
+            logger.info(f"RL Loop: Boosting high-reward memory by appending to FAISS.")
+            self.add_memory(text, metadata)
 
     def search_similar(self, text: str, top_k: int = 5, distance_threshold: float = 1.5) -> List[Dict[str, Any]]:
         """
         Searches the FAISS index for the most similar past incidents.
-        Filters out matches beyond a certain distance threshold.
+        Filters out matches beyond a certain distance threshold and deprecated matches.
         """
         if self.index.ntotal == 0:
             return []
             
-        k = min(top_k, self.index.ntotal)
-        
+        k = min(top_k * 2, self.index.ntotal) # search deeper to account for deprecated
         query_vec = self.embedding.embed(text).reshape(1, -1)
-        
-        # Search FAISS index: distances and indices
         distances, indices = self.index.search(query_vec, k)
         
         results = []
         for dist, idx in zip(distances[0], indices[0]):
             if idx != -1 and dist <= distance_threshold:
                 meta = self.metadata_store.get(int(idx), {})
-                results.append({
-                    "faiss_id": int(idx),
-                    "distance": float(dist),
-                    "metadata": meta
-                })
+                # RL Check: Filter out deprecated bad memories
+                if not meta.get("deprecated", False):
+                    results.append({
+                        "faiss_id": int(idx),
+                        "distance": float(dist),
+                        "metadata": meta
+                    })
+            if len(results) >= top_k:
+                break
                 
         return results
+        
+    def get_all_metadata(self) -> List[Dict[str, Any]]:
+        """
+        Retrieves all valid (non-deprecated) metadata from the FAISS store.
+        Used for geographic clustering and dashboard analytics.
+        """
+        return [meta for idx, meta in self.metadata_store.items() if not meta.get("deprecated", False)]
