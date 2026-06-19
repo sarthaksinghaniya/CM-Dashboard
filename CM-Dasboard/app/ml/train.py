@@ -41,8 +41,56 @@ class TrainPipeline:
         logger.info(f"Loaded {len(df)} records.")
         return df
         
+    def _prepare_pytorch_loss(self, class_weights_dict):
+        """
+        Placeholder for Phase 2 when the architecture shifts to PyTorch.
+        Converts class weights to a PyTorch tensor and injects into CrossEntropyLoss.
+        """
+        # User requested:
+        # 1. Convert to torch tensor
+        # 2. Move to device
+        # 3. Use torch.nn.CrossEntropyLoss(weight=class_weights)
+        import torch
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        
+        # Sort keys to ensure correct tensor ordering
+        sorted_weights = [class_weights_dict[k] for k in sorted(class_weights_dict.keys())]
+        tensor_weights = torch.tensor(sorted_weights, dtype=torch.float32).to(device)
+        
+        # This will be used when we switch from XGBoost -> PyTorch Neural Network
+        loss_fn = torch.nn.CrossEntropyLoss(weight=tensor_weights)
+        return loss_fn
+
+    def compute_and_log_class_weights(self, y_train):
+        """Computes class weights, runs sanity checks, and returns dict & sample_weights."""
+        from sklearn.utils.class_weight import compute_class_weight
+        import numpy as np
+        
+        classes = np.unique(y_train)
+        weights = compute_class_weight('balanced', classes=classes, y=y_train)
+        
+        class_weights_dict = {c: w for c, w in zip(classes, weights)}
+        
+        logger.info("\n--- Computed Class Weights ---")
+        for cls, w in class_weights_dict.items():
+            logger.info(f"Class {cls}: Weight {w:.4f}")
+            
+        max_w = max(weights)
+        min_w = min(weights)
+        if min_w > 0 and (max_w / min_w) > 5.0:
+            logger.warning(f"Extreme class imbalance detected! Max weight is >5x the min weight ({max_w:.2f} vs {min_w:.2f}).")
+            
+        # Prepare tensor stub for future PyTorch architecture upgrade
+        _ = self._prepare_pytorch_loss(class_weights_dict)
+            
+        # Compute sample_weights array for XGBoost
+        sample_weights = np.array([class_weights_dict[y] for y in y_train])
+        return class_weights_dict, sample_weights
+
     def train_model(self, X_train, y_train, model_type: str = "xgb"):
         """Trains either XGBoost or RandomForest based on the target task."""
+        class_weights_dict, sample_weights = self.compute_and_log_class_weights(y_train)
+        
         if model_type == "xgb":
             logger.info("Initializing XGBoost Classifier...")
             model = XGBClassifier(
@@ -52,16 +100,18 @@ class TrainPipeline:
                 n_estimators=100,
                 max_depth=6
             )
+            logger.info("Fitting XGBoost model with sample_weights to handle class imbalance...")
+            model.fit(X_train, y_train, sample_weight=sample_weights)
         else:
             logger.info("Initializing Random Forest Classifier...")
             model = RandomForestClassifier(
                 n_estimators=100, 
                 random_state=42,
-                class_weight="balanced"
+                class_weight=class_weights_dict  # Pass explicit weights instead of "balanced" string
             )
+            logger.info("Fitting Random Forest model...")
+            model.fit(X_train, y_train)
             
-        logger.info("Fitting model...")
-        model.fit(X_train, y_train)
         return model
         
     def evaluate(self, model, X_test, y_test, name: str = "Model", label_encoder=None):
