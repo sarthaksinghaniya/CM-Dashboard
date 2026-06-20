@@ -112,3 +112,58 @@ async def async_send_notification_email(
     </html>
     """
     await asyncio.to_thread(sync_send_email, email_to, subject, html_content)
+
+async def async_send_feedback_acknowledgement_email(
+    email_to: str,
+    ticket_id: str,
+    rating: int,
+    remarks: str
+) -> None:
+    """
+    Async wrapping of the citizen feedback acknowledgement email dispatch.
+    """
+    subject = f"Feedback Received - Grievance Ticket {ticket_id}"
+    stars = "★" * rating + "☆" * (5 - rating)
+    html_content = f"""
+    <html>
+        <body style="font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; color: #333;">
+            <div style="max-width: 600px; margin: 0 auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                <div style="background-color: #0b3c5d; color: #fff; padding: 20px; text-align: center;">
+                    <h2 style="margin: 0; font-size: 20px; font-weight: bold; letter-spacing: 1px;">DELHI CHIEF MINISTER'S OFFICE</h2>
+                    <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">Grievance Redressal Portal</p>
+                </div>
+                <div style="padding: 25px; background-color: #ffffff;">
+                    <h3 style="color: #0b3c5d; margin-top: 0; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px;">Citizen Feedback Acknowledgement</h3>
+                    <p>Dear Citizen,</p>
+                    <p>Thank you for submitting your feedback for your resolved grievance. Your response has been successfully registered in our systems.</p>
+                    
+                    <div style="background-color: #f8f9fa; border-left: 4px solid #f0ad4e; padding: 15px; margin: 20px 0; border-radius: 0 4px 4px 0;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <tr>
+                                <td style="padding: 5px 0; font-weight: bold; width: 120px; color: #555;">Ticket ID:</td>
+                                <td style="padding: 5px 0; color: #333;">{ticket_id}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 5px 0; font-weight: bold; color: #555;">Rating:</td>
+                                <td style="padding: 5px 0; color: #333;">
+                                    <span style="font-size: 16px; font-weight: bold; color: #f0ad4e;">{stars}</span> ({rating}/5)
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 5px 0; font-weight: bold; color: #555; vertical-align: top;">Remarks:</td>
+                                <td style="padding: 5px 0; color: #555; font-style: italic;">{remarks or "No remarks provided."}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    
+                    <p>Your feedback is vital to our reinforcement learning model and helps us dynamically adjust officer workloads, identify training requirements, and enhance our overall grievance response systems.</p>
+                </div>
+                <div style="background-color: #f5f7fa; padding: 15px; text-align: center; border-top: 1px solid #eee; font-size: 12px; color: #777;">
+                    <p style="margin: 0;">This is an automated notification. Please do not reply to this email.</p>
+                    <p style="margin: 5px 0 0 0; font-weight: bold;">Chief Minister's Office, Government of National Capital Territory of Delhi &copy; 2026</p>
+                </div>
+            </div>
+        </body>
+    </html>
+    """
+    await asyncio.to_thread(sync_send_email, email_to, subject, html_content)

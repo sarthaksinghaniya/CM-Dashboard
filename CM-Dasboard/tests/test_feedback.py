@@ -188,3 +188,121 @@ async def test_submit_feedback_soft_deleted(async_client: AsyncClient, db_sessio
     }
     response = await async_client.post("/api/v1/feedback/", json=payload)
     assert response.status_code == 404
+
+from unittest.mock import AsyncMock, patch
+
+@pytest.mark.asyncio
+async def test_submit_feedback_triggers_email_dispatch(async_client: AsyncClient, db_session: AsyncSession):
+    # Create resolved complaint
+    complaint = Complaint(
+        ticket_id="DL-2026-FDBK06",
+        citizen_name="Alex Emailer",
+        citizen_email="alex@delhi.gov.in",
+        citizen_phone="9876543210",
+        title="Streetlight Broken",
+        description="Dark corner",
+        category="PUBLIC_LIGHTING",
+        department="PWD",
+        district="East Delhi",
+        priority=PriorityEnum.LOW,
+        status=ComplaintStatus.RESOLVED
+    )
+    db_session.add(complaint)
+    await db_session.commit()
+
+    payload = {
+        "ticket_id": "DL-2026-FDBK06",
+        "rating": 5,
+        "remarks": "Excellent job!"
+    }
+    
+    with patch("app.api.routes.feedback.send_feedback_email_safely", new_callable=AsyncMock) as mock_send_email:
+        response = await async_client.post("/api/v1/feedback/", json=payload)
+        assert response.status_code == 201
+        # The background task should be added/triggered
+        mock_send_email.assert_called_once_with(
+            email_to="alex@delhi.gov.in",
+            ticket_id="DL-2026-FDBK06",
+            rating=5,
+            remarks="Excellent job!"
+        )
+
+@pytest.mark.asyncio
+async def test_submit_feedback_smtp_failure_non_blocking(async_client: AsyncClient, db_session: AsyncSession):
+    # Create resolved complaint
+    complaint = Complaint(
+        ticket_id="DL-2026-FDBK07",
+        citizen_name="Bob SMTP",
+        citizen_email="bob@delhi.gov.in",
+        citizen_phone="9876543210",
+        title="Water leak",
+        description="Leaking pipe",
+        category="WATER_SUPPLY",
+        department="DJB",
+        district="South Delhi",
+        priority=PriorityEnum.LOW,
+        status=ComplaintStatus.RESOLVED
+    )
+    db_session.add(complaint)
+    await db_session.commit()
+
+    payload = {
+        "ticket_id": "DL-2026-FDBK07",
+        "rating": 4,
+        "remarks": "Water leakage stopped."
+    }
+
+    # Patch the actual async_send_feedback_acknowledgement_email to throw an SMTP error
+    with patch("app.services.email.smtp.async_send_feedback_acknowledgement_email", side_effect=Exception("SMTP Connection Refused")):
+        # The post endpoint should succeed (201) because email failure does not rollback or crash the response
+        response = await async_client.post("/api/v1/feedback/", json=payload)
+        assert response.status_code == 201
+        assert response.json()["message"] == "Thank you"
+
+@pytest.mark.asyncio
+async def test_submit_feedback_rate_limiting(async_client: AsyncClient, db_session: AsyncSession):
+    # We will clear the in-memory rate limiter store first to isolate the test
+    from app.core.rate_limit import _in_memory_limits
+    _in_memory_limits.clear()
+
+    # Create 11 resolved complaints to submit 11 feedbacks from the same IP (127.0.0.1)
+    for i in range(1, 12):
+        ticket_id = f"DL-2026-LMT{i:03d}"
+        complaint = Complaint(
+            ticket_id=ticket_id,
+            citizen_name=f"Citizen {i}",
+            citizen_email=f"citizen{i}@example.com",
+            citizen_phone="9876543210",
+            title=f"Incident {i}",
+            description=f"Description {i}",
+            category="WASTE",
+            department="MCD",
+            district="Central Delhi",
+            priority=PriorityEnum.LOW,
+            status=ComplaintStatus.RESOLVED
+        )
+        db_session.add(complaint)
+    await db_session.commit()
+
+    # We patch Redis to fail so that the fallback in-memory rate limiter is executed and tested
+    with patch("redis.asyncio.from_url", side_effect=Exception("Redis offline")):
+        # Submit 10 feedbacks: all should succeed
+        for i in range(1, 11):
+            ticket_id = f"DL-2026-LMT{i:03d}"
+            payload = {
+                "ticket_id": ticket_id,
+                "rating": 5,
+                "remarks": "Great work!"
+            }
+            response = await async_client.post("/api/v1/feedback/", json=payload)
+            assert response.status_code == 201
+
+        # The 11th feedback submission should hit the rate limiter and return 429
+        payload_11 = {
+            "ticket_id": "DL-2026-LMT011",
+            "rating": 5,
+            "remarks": "Great work!"
+        }
+        response_11 = await async_client.post("/api/v1/feedback/", json=payload_11)
+        assert response_11.status_code == 429
+        assert "Rate limit exceeded" in response_11.json()["detail"]

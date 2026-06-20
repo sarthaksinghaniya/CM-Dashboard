@@ -1,79 +1,84 @@
 version: '3.8'
 
 services:
-  web:
-    build: .
+  fastapi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fastapi_app
     ports:
       - "8000:8000"
     environment:
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - SQLALCHEMY_DATABASE_URI=postgresql+asyncpg://postgres:postgres@db:5432/cm_db
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_SERVER=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-complaint_db}
       - USE_SQLITE=false
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-24806a58ba58efbf80c8dc297e68cf0a9ad847e1329a1b1812e9b08f4c02931a}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - EMAILS_FROM_EMAIL=${EMAILS_FROM_EMAIL:-no-reply@delhi.gov.in}
     depends_on:
-      db:
+      postgres:
         condition: service_healthy
-      redis:
-        condition: service_started
     volumes:
-      - ./app:/app/app
-      - ./memory_data:/app/memory_data
+      - uploads:/app/app/static/uploads
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
-  worker:
-    build: .
-    command: celery -A app.worker.celery_app worker --loglevel=info
-    environment:
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - SQLALCHEMY_DATABASE_URI=postgresql+asyncpg://postgres:postgres@db:5432/cm_db
-      - USE_SQLITE=false
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    volumes:
-      - ./app:/app/app
-      - ./memory_data:/app/memory_data
-
-  beat:
-    build: .
-    command: celery -A app.worker.celery_app beat --loglevel=info
-    environment:
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - SQLALCHEMY_DATABASE_URI=postgresql+asyncpg://postgres:postgres@db:5432/cm_db
-      - USE_SQLITE=false
-    depends_on:
-      redis:
-        condition: service_started
-
-  db:
+  postgres:
     image: postgres:15-alpine
+    container_name: postgres_db
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=cm_db
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-complaint_db}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ${POSTGRES_DB:-complaint_db}"]
       interval: 5s
       timeout: 5s
       retries: 5
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: scheduler_service
+    command: python -m app.scheduler_run
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_SERVER=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-complaint_db}
+      - USE_SQLITE=false
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-24806a58ba58efbf80c8dc297e68cf0a9ad847e1329a1b1812e9b08f4c02931a}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - EMAILS_FROM_EMAIL=${EMAILS_FROM_EMAIL:-no-reply@delhi.gov.in}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      fastapi:
+        condition: service_healthy
     volumes:
-      - redis_data:/data
+      - uploads:/app/app/static/uploads
 
 volumes:
   postgres_data:
-  redis_data:
+  uploads:

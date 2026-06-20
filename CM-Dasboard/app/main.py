@@ -486,3 +486,7 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         return JSONResponse(status_code=503, content=response_data)
         
     return response_data
+
+@app.get(f"{settings.API_V1_STR}/health", tags=["System"])
+async def api_v1_health_check(db: AsyncSession = Depends(get_db)):
+    return await health_check(db=db)
