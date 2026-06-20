@@ -151,30 +151,37 @@ async def classify_complaint(
 @complaints_router.post("/rag/query", response_model=RAGResponse)
 async def query_rag(
     request: QueryRequest,
-    service: ContextRetriever = Depends(get_rag_service) # Fixed: Re-enabled production DI engine
+    service: ContextRetriever = Depends(get_rag_service) # Re-enabled production DI engine
 ):
     """
-    RAG Route. Utilizes your local ContextRetriever. If the index is blank or 
-    unreachable, it defaults to zero-shot generation to prevent server errors.
+    RAG Route. Utilizes local ContextRetriever. Pre-renders the answer text 
+    and appends it safely as the first element of the context array payload 
+    to preserve downstream field compatibility with RAGResponse schema restrictions.
     """
     try:
         contexts = []
         
+        # 1. Safely extract historical cases via your local retrieval service threadpool
         if service:
             try:
                 res = await asyncio.to_thread(service.get_context, request.query)
                 if res and "similar_cases" in res:
-                    contexts = [c.get("metadata", {}).get("text", "") for c in res.get("similar_cases", []) if c.get("metadata")]
+                    contexts = [
+                        c.get("metadata", {}).get("text", "") 
+                        for c in res.get("similar_cases", []) 
+                        if c.get("metadata")
+                    ]
             except Exception as retrieval_err:
                 logger.warning(f"[RAG_RETRIEVAL_WARN] Local vector store lookup skipped: {str(retrieval_err)}")
 
-        # Handle empty database or cold-start scenarios gracefully
+        # 2. Mitigate cold starts by setting up fallback grounding text
         if not contexts:
             context_str = "No specific system procedures found in local FAISS memory store database (Index Cold Start State)."
             logger.info("[RAG_ENGINE] Empty context state encountered. Shifting to standard grounding baseline.")
         else:
             context_str = "\n".join([f"- {c}" for c in contexts])
 
+        # 3. Assemble clear system operational boundaries for Gemini matching
         system_instruction = (
             "You are an expert AI operator managing the City & Facility Operations Dashboard.\n"
             "Your job is to answer incoming queries or process citizen complaints using ONLY the factual context provided below.\n"
@@ -187,6 +194,7 @@ async def query_rag(
         if not ai_client:
             raise HTTPException(status_code=500, detail="Gemini Engine API client is offline.")
 
+        # 4. Generate the response text within a thread-isolated container lookahead
         response = await asyncio.to_thread(
             ai_client.models.generate_content,
             model='gemini-2.5-flash',
@@ -197,10 +205,12 @@ async def query_rag(
             )
         )
 
+        # 5. Fix Schema Filter Drop: Format generated text elements directly into context array payload
+        # This keeps the exact structure expected by your response model contract
+        response_payload = [f"GENERATED_ANSWER: {response.text}"] + contexts
+
         return RAGResponse(
-            query=request.query,
-            answer=response.text,
-            context=contexts
+            context=response_payload
         )
 
     except Exception as e:
