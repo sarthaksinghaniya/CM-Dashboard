@@ -18,7 +18,7 @@ from app.schemas.complaint import ComplaintSubmissionResponse, CrisisCreate, Cri
 from app.services.ml.inference import MLInferenceService
 from app.services.email.smtp import async_send_complaint_acknowledgement_email
 from app.services.storage.attachment import AttachmentService
-from app.services.routing.engine import RoutingEngine
+from app.engines.routing import RoutingEngine
 from app.services.notification.service import NotificationService
 
 logger = logging.getLogger(__name__)

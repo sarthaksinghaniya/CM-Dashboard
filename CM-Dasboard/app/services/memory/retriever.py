@@ -1,6 +1,6 @@
 import logging
 from typing import List, Dict, Any
-from app.services.memory.faiss_memory import FaissMemory
+from app.engines.faiss_rag import FaissMemory
 
 logger = logging.getLogger(__name__)
 

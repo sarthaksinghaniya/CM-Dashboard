@@ -8,7 +8,7 @@ from typing import List, Dict, Any
 from app.services.memory.embedding import MemoryEmbeddingService
 from threading import Lock
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("cm_dashboard.engines.faiss_rag")
 
 faiss_lock = Lock()
 

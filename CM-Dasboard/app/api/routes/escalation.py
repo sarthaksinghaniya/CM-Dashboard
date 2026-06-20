@@ -9,7 +9,7 @@ from app.models.complaint import Complaint, ComplaintStatus, PriorityEnum
 from app.models.complaint_update import ComplaintUpdate
 from app.models.escalation import Escalation
 from app.models.user import User, RoleEnum
-from app.services.routing.engine import RoutingEngine
+from app.engines.routing import RoutingEngine
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

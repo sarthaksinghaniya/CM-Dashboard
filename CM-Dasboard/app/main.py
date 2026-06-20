@@ -22,7 +22,7 @@ logger = logging.getLogger("cm_dashboard.main")
 from app.services.ml.inference import MLInferenceService
 from app.services.memory.retriever import ContextRetriever
 from app.api.routes import api_router
-from app.services.memory.faiss_memory import FaissMemory
+from app.engines.faiss_rag import FaissMemory
 from app.services.agents.decision_agent import DecisionAgent
 from app.schemas.incident import (
     ComplaintRequest, 
@@ -36,7 +36,7 @@ from app.schemas.incident import (
 from app.db.session import AsyncSessionLocal
 from app.models.complaint import Complaint, ComplaintStatus, PriorityEnum
 from app.models.complaint_update import ComplaintUpdate
-from app.services.routing.engine import RoutingEngine
+from app.engines.routing import RoutingEngine
 from sqlalchemy.future import select
 
 # -----------------------------------------------------------------------------
@@ -151,25 +151,24 @@ async def run_pipeline(
 # FASTAPI APPLICATION
 # -----------------------------------------------------------------------------
 from contextlib import asynccontextmanager
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from app.engines.scheduler import SchedulerEngine
 
 # Global Scheduler Instance
-scheduler = AsyncIOScheduler()
+scheduler_engine = SchedulerEngine()
+scheduler = scheduler_engine.scheduler
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     get_memory_service().load_memory()
     
-    # Boot APScheduler natively
-    scheduler.start()
-    logger.info("APScheduler background task runner started.")
+    # Boot SchedulerEngine
+    scheduler_engine.start()
     
     yield
     
     # Shutdown
-    scheduler.shutdown()
-    logger.info("APScheduler gracefully shut down.")
+    scheduler_engine.stop()
     get_memory_service().save_memory()
 
 app = FastAPI(

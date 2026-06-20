@@ -150,11 +150,7 @@ class PipelineEngine:
         The central, deterministic pipeline executor.
         It is fully isolated from APIs, idempotent, and failure-safe.
         """
-        from app.services.ml.inference import MLInferenceService
-        from app.services.memory.retriever import ContextRetriever
-        from app.services.memory.faiss_memory import FaissMemory
-        from app.services.agents.decision_agent import DecisionAgent
-        from app.services.routing.engine import RoutingEngine
+        from app.engines.routing import RoutingEngine
         
         async with session_factory() as session:
             # 1. Idempotent Transition Lock
@@ -166,45 +162,32 @@ class PipelineEngine:
             text = complaint.description or complaint.title
             
         try:
-            # 2. Execute ML Services (Failure-Safe Boundary)
-            classifier = MLInferenceService()
-            rag = ContextRetriever()
-            memory = FaissMemory()
-            agent = DecisionAgent()
-            
-            classification_res = await asyncio.to_thread(classifier.predict, text)
-            labels = classification_res.get("category_pred", ["OTHER"])
-            confidence = classification_res.get("confidence_score", 0.5)
-            
-            pred_priority_str = await asyncio.to_thread(classifier.predict_severity, text)
+            # 2. Execute AI Auto Routing Engine
+            from app.engines.routing import RoutingEngine
             
             async with session_factory() as session:
                 query = select(Complaint).filter(Complaint.ticket_id == ticket_id)
                 res = await session.execute(query)
                 complaint = res.scalars().first()
                 
-                complaint.priority = PriorityEnum[pred_priority_str]
-                complaint.category = labels[0] if labels else "OTHER"
-                complaint.department = RoutingEngine.get_department(complaint.category)
-                
-                assigned_to = None
-                if confidence >= 0.7:
-                    assigned_to = await RoutingEngine.route_complaint(complaint.category, complaint.district, session)
-                    complaint.assigned_to = assigned_to
-                
-                await session.commit()
-                
-            # 3. Memory & Analytics
-            rag_res = await asyncio.to_thread(rag.get_context, text)
-            similar_cases = rag_res.get("similar_cases", [])
-            decision_res = await agent.process(text, context=similar_cases, ml_predictions=labels)
+                district = complaint.district
+                text = complaint.description or complaint.title
             
-            metadata = {
-                "ticket_id": ticket_id,
-                "decision": decision_res.get('decision'),
-                "labels": labels
-            }
-            await asyncio.to_thread(memory.add_memory, text, metadata)
+            routing_result = await RoutingEngine.process_routing(text, district, session_factory)
+            
+            # 3. Apply Routing Decision
+            async with session_factory() as session:
+                query = select(Complaint).filter(Complaint.ticket_id == ticket_id)
+                res = await session.execute(query)
+                complaint = res.scalars().first()
+                
+                complaint.priority = routing_result["priority"]
+                complaint.category = routing_result["category"]
+                complaint.department = routing_result["department"]
+                complaint.assigned_to = routing_result["assigned_to"]
+                
+                assigned_to = routing_result["assigned_to"]
+                await session.commit()
             
             # 4. Final Transition
             async with session_factory() as session:
