@@ -1,11 +1,10 @@
-feat(arch): migrate monolithic execution to distributed Celery + Redis architecture
+feat(ai): integrate robust FAISS memory and deterministic pipeline engine
 
-This commit completely transforms the system into a highly scalable, production-grade asynchronous backend by decoupling execution workloads via task queues:
+This commit completely rebuilds the core AI memory and execution flow:
 
-- feat(broker): integrate Redis as the primary message broker and Celery result backend
-- feat(queue): offload main `execute_pipeline_task` from synchronous API loops into dedicated Celery workers
-- feat(cron): replace in-memory APScheduler with stateless Celery Beat cron jobs for escalation and retry triggers
-- feat(orchestration): introduce a comprehensive `docker-compose.yml` for unified provisioning of API, PostgreSQL, Redis, Worker, and Beat layers
-- fix(health): augment `/health` endpoint to throw 503 degraded states if Redis or Celery control probes fail
-- fix(faiss): guarantee cross-thread safety by securely wrapping `apply_rl_reward` inside `faiss_lock`
-- chore(deps): upgrade `requirements.txt` with required `celery` and `redis` integrations
+- feat(pipeline): implement `PipelineEngine` to orchestrate deterministic complaint execution, preventing state race-conditions using optimistic checks and atomic DB tracking
+- feat(retry): embed robust exponential backoff retry handler to safely escalate transient AI model failures and limit catastrophic loops
+- refactor(celery): cleanly decouple execution logic from `app/tasks/pipeline.py` and hand-off to the `execute_core` abstraction boundary
+- feat(memory): overhaul `faiss_memory.py` to be fully thread-safe across all read/write/persist boundaries using global `faiss_lock`
+- feat(memory): introduce automatic semantic deduplication (Euclidean distance < 0.01) within memory ingestion to prevent pipeline bloat
+- feat(memory): implement `async_` wrappers to allow non-blocking CPU execution during FastAPI inference boundaries
