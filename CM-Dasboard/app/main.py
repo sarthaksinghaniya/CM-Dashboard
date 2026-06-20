@@ -190,27 +190,35 @@ from sqlalchemy import text
 @app.get("/health", tags=["System"])
 async def health_check(db: AsyncSession = Depends(get_db)):
     from fastapi.responses import JSONResponse
-    from app.main import scheduler
     
+    # --- DB check ---
     try:
         await db.execute(text("SELECT 1"))
         db_status = "connected"
     except Exception:
         db_status = "disconnected"
 
-    # APScheduler local native fallback
-    scheduler_status = "running" if scheduler.running else "stopped"
+    # --- Scheduler check (direct reference, no celery import) ---
+    try:
+        scheduler_status = "running" if scheduler.running else "stopped"
+    except Exception:
+        scheduler_status = "unknown"
     
-    faiss_loaded = get_memory_service().index is not None and get_memory_service().index.ntotal >= 0
+    # --- FAISS check (resilient to None) ---
+    try:
+        mem = get_memory_service()
+        faiss_loaded = mem.index is not None and mem.index.ntotal >= 0
+    except Exception:
+        faiss_loaded = False
     
-    is_ok = db_status == "connected" and faiss_loaded and scheduler_status == "running"
+    is_ok = db_status == "connected" and scheduler_status == "running"
     
     response_data = {
         "status": "ok" if is_ok else "degraded",
         "database": db_status,
         "scheduler": scheduler_status,
         "faiss_loaded": faiss_loaded,
-        "fallback_mode": True
+        "faiss_vectors": mem.index.ntotal if faiss_loaded else 0,
     }
     
     if not is_ok:
