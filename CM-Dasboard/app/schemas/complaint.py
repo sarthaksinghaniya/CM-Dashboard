@@ -52,3 +52,30 @@ class ComplaintSubmissionResponse(BaseModel):
     ticket_id: str
     status: str
     estimated_sla: str
+
+class ComplaintAttachmentSchema(BaseModel):
+    file_url: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class TimelineEventSchema(BaseModel):
+    status: str
+    note: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class ComplaintTrackingResponse(BaseModel):
+    ticket_id: str
+    status: ComplaintStatus
+    priority: PriorityEnum
+    category: str
+    department: str
+    district: str
+    created_at: datetime
+    updated_at: datetime
+    attachments: List[ComplaintAttachmentSchema] = []
+    timeline: List[TimelineEventSchema] = []
+
+    model_config = ConfigDict(from_attributes=True)

@@ -14,12 +14,13 @@ from app.db.session import get_db
 from app.models.complaint import Complaint, PriorityEnum, ComplaintStatus
 from app.models.complaint_update import ComplaintUpdate
 from app.models.attachment import Attachment
-from app.schemas.complaint import ComplaintSubmissionResponse, CrisisCreate, CrisisUpdate
+from app.schemas.complaint import ComplaintSubmissionResponse, CrisisCreate, CrisisUpdate, ComplaintTrackingResponse
 from app.services.ml.inference import MLInferenceService
 from app.services.email.smtp import async_send_complaint_acknowledgement_email
 from app.services.storage.attachment import AttachmentService
 from app.engines.routing import RoutingEngine
 from app.services.notification.service import NotificationService
+from app.services.complaint_tracking import ComplaintTrackingService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -27,6 +28,7 @@ router = APIRouter()
 # Validation regex patterns
 EMAIL_REGEX = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
 PHONE_REGEX = r"^\+?[0-9]{10,15}$"
+TICKET_REGEX = r"^DL-\d{4}-[A-Z0-9]{6}$"
 
 def get_sla_for_priority(priority: PriorityEnum) -> str:
     if priority == PriorityEnum.CRITICAL:
@@ -245,3 +247,30 @@ async def submit_complaint(
         status=initial_status.value,
         estimated_sla=estimated_sla
     )
+
+
+@router.get("/track/{ticket_id}", response_model=ComplaintTrackingResponse)
+async def track_complaint(
+    ticket_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Public endpoint for citizens to track the status and timeline of a complaint by its ticket_id.
+    Does not require authentication.
+    """
+    # 1. Validate ticket format
+    if not re.match(TICKET_REGEX, ticket_id, re.IGNORECASE):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid ticket format. Expected format: DL-YYYY-XXXXXX"
+        )
+
+    # 2. Fetch tracking details
+    tracking_data = await ComplaintTrackingService.get_tracking_data(ticket_id, db)
+    if not tracking_data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Complaint with ticket ID '{ticket_id}' not found."
+        )
+
+    return tracking_data
