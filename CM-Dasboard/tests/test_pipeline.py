@@ -8,7 +8,7 @@ from app.services.agents.decision_agent import DecisionAgent
 
 @pytest.fixture
 def mock_faiss_memory():
-    with patch('app.services.memory.faiss_memory.FaissMemory.search_similar') as mock_search:
+    with patch('app.engines.faiss_rag.FaissMemory.search_similar') as mock_search:
         mock_search.return_value = [
             {"distance": 0.1, "metadata": {"complaint": "Garbage bin overflowing", "decision": "SANITATION_DEPT", "outcome": "Resolved", "labels": ["SANITATION"]}}
         ]

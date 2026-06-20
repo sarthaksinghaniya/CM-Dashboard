@@ -82,16 +82,19 @@ async def submit_citizen_feedback(
     )
     db.add(feedback)
 
-    # 7. Apply RL Reward to FAISS Memory
-    # High rating (4-5) -> +1.0
-    # Low rating (1-2) -> -1.0
-    # Neutral rating (3) -> 0.0
-    if payload.rating >= 4:
-        reward = 1.0
-    elif payload.rating <= 2:
-        reward = -1.0
-    else:
-        reward = 0.0
+    # 7. Apply RL Reward to FAISS Memory & record in ledger
+    try:
+        from app.services.rl.feedback_manager import FeedbackManager
+        feedback_manager = FeedbackManager()
+        reward = feedback_manager.record_citizen_rating(
+            ticket_id=ticket_id,
+            rating=payload.rating,
+            remarks=payload.remarks
+        )
+    except Exception as e:
+        logger.error(f"Failed to record rating reward in ledger: {e}")
+        rating_map = {5: 1.0, 4: 0.5, 3: 0.0, 2: -1.0, 1: -2.0}
+        reward = rating_map.get(payload.rating, 0.0)
 
     try:
         memory_service = get_memory_service()

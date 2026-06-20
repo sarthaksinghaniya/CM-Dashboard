@@ -68,7 +68,7 @@ async def test_submit_feedback_low_rating_negative_reward(async_client: AsyncCli
     db_session.add(complaint)
     await db_session.commit()
 
-    # Submit low rating (1 star -> reward -1.0)
+    # Submit low rating (1 star -> reward -2.0)
     payload = {
         "ticket_id": "DL-2026-FDBK02",
         "rating": 1,
@@ -76,7 +76,7 @@ async def test_submit_feedback_low_rating_negative_reward(async_client: AsyncCli
     }
     response = await async_client.post("/api/v1/feedback/", json=payload)
     assert response.status_code == 201
-    assert response.json()["reward"] == -1.0
+    assert response.json()["reward"] == -2.0
 
 @pytest.mark.asyncio
 async def test_submit_feedback_unresolved_complaint(async_client: AsyncClient, db_session: AsyncSession):

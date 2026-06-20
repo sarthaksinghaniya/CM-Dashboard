@@ -131,9 +131,18 @@ async def submit_complaint(
     # Map department
     final_department = get_department_for_category(final_category)
 
-    # 3.5. Route Complaint
+    # 3.5. Route Complaint (Dynamically calculated threshold using Policy Engine)
+    try:
+        from app.services.rl.policy import DynamicPolicyEngine
+        policy_engine = DynamicPolicyEngine()
+        policy = policy_engine.get_current_policy()
+        confidence_threshold = policy.get("confidence_storage_threshold", 0.75)
+    except Exception as e:
+        logger.warning(f"Failed to fetch dynamic policy: {e}. Using baseline 0.75")
+        confidence_threshold = 0.75
+
     assigned_to = None
-    if confidence_score >= 0.7:
+    if confidence_score >= confidence_threshold:
         assigned_to = await RoutingEngine.route_complaint(final_category, district, db)
 
     # 4. Generate Ticket ID (using UUID for distributed safety)
