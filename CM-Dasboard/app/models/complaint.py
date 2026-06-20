@@ -18,6 +18,8 @@ class ComplaintStatus(str, enum.Enum):
     RESOLVED = "RESOLVED"
     CLOSED = "CLOSED"
     ESCALATED = "ESCALATED"
+    FAILED = "FAILED"
+    FAILED_FINAL = "FAILED_FINAL"
 
 class Complaint(BaseModel):
     __tablename__ = "complaints"
@@ -46,6 +48,7 @@ class Complaint(BaseModel):
     # Retry Tracking
     retry_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     last_retry_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    failure_reason: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     # Relationships
     assigned_officer: Mapped[Optional["User"]] = relationship(

@@ -196,6 +196,20 @@ async def execute_pipeline_task(ticket_id: str):
         
     except Exception as e:
         logger.error(f"Async pipeline execution failed for ticket {ticket_id}: {str(e)}", exc_info=True)
+        try:
+            async with AsyncSessionLocal() as session:
+                query = select(Complaint).filter(Complaint.ticket_id == ticket_id)
+                result = await session.execute(query)
+                complaint = result.scalars().first()
+                if complaint:
+                    if complaint.retry_count >= 3:
+                        complaint.status = ComplaintStatus.FAILED_FINAL
+                    else:
+                        complaint.status = ComplaintStatus.FAILED
+                    complaint.failure_reason = str(e)
+                    await session.commit()
+        except Exception as db_e:
+            logger.error(f"Failed to update database with failure state for ticket {ticket_id}: {db_e}", exc_info=True)
 
 class PipelineRunRequest(BaseModel):
     ticket_id: str
@@ -243,4 +257,10 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 
 @app.get("/health", tags=["System"])
 async def health_check():
-    return {"status": "ok"}
+    from app.services.scheduler import scheduler
+    faiss_loaded = get_memory_service().index is not None and get_memory_service().index.ntotal >= 0
+    return {
+        "status": "ok",
+        "faiss_loaded": faiss_loaded,
+        "scheduler_running": scheduler.running
+    }

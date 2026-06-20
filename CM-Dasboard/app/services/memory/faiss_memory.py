@@ -4,7 +4,11 @@ import logging
 from typing import List, Dict, Any
 from app.services.memory.embedding import MemoryEmbeddingService
 
+from threading import Lock
+
 logger = logging.getLogger(__name__)
+
+faiss_lock = Lock()
 
 class FaissMemory:
     """
@@ -34,13 +38,14 @@ class FaissMemory:
         Generates embeddings for the text and stores it in the FAISS index.
         """
         vec = self.embedding.embed(text).reshape(1, -1)
-        self.index.add(vec)
-        self.metadata_store[self._current_id] = {
-            "text": text,
-            "deprecated": False,
-            **(metadata or {})
-        }
-        self._current_id += 1
+        with faiss_lock:
+            self.index.add(vec)
+            self.metadata_store[self._current_id] = {
+                "text": text,
+                "deprecated": False,
+                **(metadata or {})
+            }
+            self._current_id += 1
         return True
 
     def save_memory(self, index_path="memory.faiss", meta_path="meta.json"):

@@ -38,10 +38,10 @@ async def scheduled_retry_pipeline_job():
     
     async with AsyncSessionLocal() as session:
         try:
-            # Find complaints that have been SUBMITTED for more than 2 minutes and have retry_count < 3
+            # Find complaints that have been SUBMITTED or FAILED for more than 2 minutes and have retry_count < 3
             two_mins_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=2)
             query = select(Complaint).filter(
-                Complaint.status == ComplaintStatus.SUBMITTED,
+                Complaint.status.in_([ComplaintStatus.SUBMITTED, ComplaintStatus.FAILED]),
                 Complaint.created_at < two_mins_ago,
                 Complaint.retry_count < 3
             )
