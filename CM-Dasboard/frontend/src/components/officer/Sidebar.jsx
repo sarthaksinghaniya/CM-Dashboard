@@ -1,5 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { LayoutDashboard, FileText, Search, MessageSquare, Settings, LogOut, ShieldAlert } from 'lucide-react';
 
 const Sidebar = () => {
@@ -23,7 +24,7 @@ const Sidebar = () => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto py-8 px-4 space-y-1 scrollbar-hide">
+      <div className="flex-1 overflow-y-auto py-8 px-4 space-y-2 scrollbar-hide">
         <div className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-4 px-3">
           Overview
         </div>
@@ -35,17 +36,23 @@ const Sidebar = () => {
               to={item.path}
               end={item.end}
               className={({ isActive }) =>
-                `group flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium transition-all duration-200 ${
-                  isActive
-                    ? 'bg-indigo-500/10 text-indigo-400'
-                    : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                `group relative flex items-center gap-3 px-3 py-3 rounded-xl font-medium transition-colors duration-300 ${
+                  isActive ? 'text-white' : 'text-slate-400 hover:text-slate-200'
                 }`
               }
             >
               {({ isActive }) => (
                 <>
-                  <Icon className={`w-5 h-5 transition-colors duration-200 ${isActive ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
-                  {item.name}
+                  {isActive && (
+                    <motion.div
+                      layoutId="sidebar-highlight"
+                      className="absolute inset-0 bg-indigo-500/20 rounded-xl border border-indigo-500/20"
+                      initial={false}
+                      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                    />
+                  )}
+                  <Icon className={`w-5 h-5 relative z-10 transition-colors duration-300 ${isActive ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
+                  <span className="relative z-10">{item.name}</span>
                 </>
               )}
             </NavLink>
@@ -53,14 +60,16 @@ const Sidebar = () => {
         })}
       </div>
 
-      <div className="p-4 border-t border-white/5 space-y-1 mb-2">
-        <button className="group flex items-center gap-3 px-3 py-2.5 w-full text-left rounded-xl font-medium text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 transition-all duration-200">
-          <Settings className="w-5 h-5 text-slate-500 group-hover:text-slate-300 transition-colors" />
-          Settings
+      <div className="p-4 border-t border-white/5 space-y-2 mb-2">
+        <button className="group relative flex items-center gap-3 px-3 py-3 w-full text-left rounded-xl font-medium text-slate-400 hover:text-slate-200 transition-colors duration-300">
+          <div className="absolute inset-0 bg-slate-800/0 group-hover:bg-slate-800/50 rounded-xl transition-colors duration-300" />
+          <Settings className="w-5 h-5 relative z-10 text-slate-500 group-hover:text-slate-300 transition-colors" />
+          <span className="relative z-10">Settings</span>
         </button>
-        <button className="group flex items-center gap-3 px-3 py-2.5 w-full text-left rounded-xl font-medium text-slate-400 hover:bg-rose-500/10 hover:text-rose-400 transition-all duration-200">
-          <LogOut className="w-5 h-5 text-slate-500 group-hover:text-rose-400 transition-colors" />
-          Logout
+        <button className="group relative flex items-center gap-3 px-3 py-3 w-full text-left rounded-xl font-medium text-slate-400 hover:text-rose-400 transition-colors duration-300">
+          <div className="absolute inset-0 bg-rose-500/0 group-hover:bg-rose-500/10 rounded-xl transition-colors duration-300" />
+          <LogOut className="w-5 h-5 relative z-10 text-slate-500 group-hover:text-rose-400 transition-colors" />
+          <span className="relative z-10">Logout</span>
         </button>
       </div>
     </aside>

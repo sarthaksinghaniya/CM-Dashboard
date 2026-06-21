@@ -1,20 +1,26 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 
 const StatsCard = ({ title, count, icon: Icon, colorClass }) => {
   return (
-    <div className="group bg-white rounded-2xl shadow-[0_2px_10px_rgb(0,0,0,0.04)] border border-slate-200/60 p-6 flex items-center justify-between hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-all duration-300 ease-out cursor-default relative overflow-hidden">
-      {/* Subtle background glow effect on hover */}
-      <div className={`absolute -inset-4 opacity-0 group-hover:opacity-10 transition-opacity duration-500 blur-2xl rounded-full ${colorClass.split(' ')[0]}`} />
-      
-      <div className="relative z-10">
-        <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">{title}</p>
-        <h3 className="text-4xl font-extrabold text-slate-800 mt-2 tracking-tight">{count}</h3>
+    <motion.div 
+      whileHover={{ scale: 1.02, y: -4 }}
+      whileTap={{ scale: 0.98 }}
+      className="bg-white/80 backdrop-blur-xl rounded-2xl p-6 shadow-sm border border-slate-200/60 hover:shadow-xl hover:shadow-slate-200/50 transition-shadow duration-300 relative overflow-hidden group cursor-pointer"
+    >
+      <div className="absolute top-2 right-2 p-2 opacity-5 group-hover:opacity-10 transition-opacity duration-300">
+        <Icon className="w-16 h-16" />
       </div>
-      
-      <div className={`relative z-10 w-14 h-14 rounded-2xl flex items-center justify-center shadow-inner border border-white/50 ${colorClass}`}>
-        <Icon className="w-7 h-7" />
+      <div className="flex items-center gap-4 relative z-10">
+        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${colorClass} group-hover:scale-110 transition-transform duration-300`}>
+          <Icon className="w-6 h-6" />
+        </div>
+        <div>
+          <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">{title}</p>
+          <h3 className="text-3xl font-black text-slate-800 mt-1 tracking-tight">{count}</h3>
+        </div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 
