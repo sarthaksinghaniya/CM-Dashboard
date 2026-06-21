@@ -1,30 +1,32 @@
 import React, { useState } from 'react';
-import { submitFeedback } from '../services/api';
+import { useSubmitFeedback } from '../services/queries';
 import { motion, AnimatePresence } from 'framer-motion';
 import AnimatedPage from '../components/AnimatedPage';
-import { Star, MessageSquareHeart, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Star, MessageSquareHeart, CheckCircle2, ArrowRight, AlertCircle } from 'lucide-react';
 
 const Feedback = () => {
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [comments, setComments] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [localError, setLocalError] = useState(null);
   const [success, setSuccess] = useState(false);
+
+  const { mutateAsync: submitFeedback, isPending: loading } = useSubmitFeedback();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (rating === 0) return;
+    if (rating === 0) {
+      setLocalError('Please select a rating before submitting.');
+      return;
+    }
 
-    setLoading(true);
+    setLocalError(null);
     try {
       await submitFeedback({ rating, comments });
       setSuccess(true);
     } catch (error) {
       console.error('Failed to submit feedback', error);
-      // Show success anyway for demo purposes if backend doesn't have the route yet
-      setSuccess(true); 
-    } finally {
-      setLoading(false);
+      setLocalError('Failed to submit feedback. Please try again.');
     }
   };
 
@@ -106,6 +108,17 @@ const Feedback = () => {
                 onSubmit={handleSubmit} 
                 className="space-y-8"
               >
+                {localError && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-rose-50/90 backdrop-blur-sm text-rose-600 p-4 rounded-xl text-center font-medium border border-rose-100 flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    <AlertCircle className="w-5 h-5" />
+                    {localError}
+                  </motion.div>
+                )}
+
                 {/* Star Rating Section */}
                 <div className="space-y-5 bg-white/50 p-6 rounded-2xl border border-white/60 shadow-inner">
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-widest block">Rate your experience</label>

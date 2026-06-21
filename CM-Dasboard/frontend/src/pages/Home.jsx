@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { submitComplaint } from '../services/api';
+import { useSubmitComplaint } from '../services/queries';
 import { FileText, ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AnimatedPage from '../components/AnimatedPage';
@@ -19,23 +19,22 @@ const itemVariants = {
 
 const Home = () => {
   const [formData, setFormData] = useState({ title: '', description: '', district: '', department: '' });
-  const [loading, setLoading] = useState(false);
   const [successData, setSuccessData] = useState(null);
-  const [error, setError] = useState(null);
+  const [localError, setLocalError] = useState(null);
+
+  const { mutateAsync: submitComplaint, isPending: loading } = useSubmitComplaint();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
+    setLocalError(null);
+    
     try {
       const res = await submitComplaint(formData);
       setSuccessData(res);
       setFormData({ title: '', description: '', district: '', department: '' });
     } catch (error) {
-      console.error('Failed to submit complaint', error);
-      setError('Failed to submit complaint. Please try again.');
-    } finally {
-      setLoading(false);
+      // The error message is automatically parsed by our Axios interceptor!
+      setLocalError(error.message || 'Failed to submit complaint. Please try again.');
     }
   };
 
@@ -84,10 +83,10 @@ const Home = () => {
           transition={{ delay: 0.2 }}
           className="relative bg-white/60 backdrop-blur-xl border border-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-3xl p-8 md:p-10 overflow-hidden"
         >
-          {error && (
+          {localError && (
             <div className="mb-6 bg-rose-50/90 backdrop-blur-sm text-rose-600 p-4 rounded-xl text-center font-medium border border-rose-100 flex items-center justify-center gap-2 shadow-sm">
               <AlertCircle className="w-5 h-5" />
-              {error}
+              {localError}
             </div>
           )}
 

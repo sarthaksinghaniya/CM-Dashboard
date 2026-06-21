@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { trackComplaint } from '../services/api';
-import Loader from '../components/Loader';
+import { useTrackComplaint } from '../services/queries';
 import StatusBadge from '../components/StatusBadge';
 import AnimatedPage from '../components/AnimatedPage';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -8,26 +7,14 @@ import { Search, MapPin, User, Clock, CheckCircle2, Circle, AlertCircle } from '
 
 const Track = () => {
   const [ticketId, setTicketId] = useState('');
-  const [complaint, setComplaint] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [searchId, setSearchId] = useState(null);
 
-  const handleSearch = async (e) => {
+  const { data: complaint, isFetching: loading, isError, error } = useTrackComplaint(searchId);
+
+  const handleSearch = (e) => {
     e.preventDefault();
     if (!ticketId.trim()) return;
-
-    setLoading(true);
-    setError('');
-    setComplaint(null);
-
-    try {
-      const res = await trackComplaint(ticketId);
-      setComplaint(res);
-    } catch (err) {
-      setError('Complaint not found or invalid Ticket ID.');
-    } finally {
-      setLoading(false);
-    }
+    setSearchId(ticketId.trim());
   };
 
   const getTimelineStatus = (status) => {
@@ -104,7 +91,7 @@ const Track = () => {
         </motion.div>
 
         <AnimatePresence>
-          {error && (
+          {isError && (
             <motion.div 
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -112,7 +99,7 @@ const Track = () => {
               className="bg-rose-50/90 backdrop-blur-sm text-rose-600 p-4 rounded-xl text-center font-medium border border-rose-100 flex items-center justify-center gap-2 shadow-sm"
             >
               <AlertCircle className="w-5 h-5" />
-              {error}
+              {error?.message || 'Complaint not found.'}
             </motion.div>
           )}
 

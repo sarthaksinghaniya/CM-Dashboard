@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { getOfficerComplaints } from '../../services/api';
+import { useOfficerComplaints } from '../../services/queries';
 import StatsCard from '../../components/admin/StatsCard';
 import Charts from '../../components/admin/Charts';
 import ComplaintTable from '../../components/officer/ComplaintTable';
@@ -22,24 +22,12 @@ const itemVariants = {
 };
 
 const AdminDashboard = () => {
-  const [complaints, setComplaints] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const data = await getOfficerComplaints();
-      setComplaints(Array.isArray(data) ? data : data.items || []);
-    } catch (error) {
-      console.error('Failed to fetch dashboard data', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data, isLoading, isError, error, refetch } = useOfficerComplaints();
+  
+  const complaints = useMemo(() => {
+    if (!data) return [];
+    return Array.isArray(data) ? data : data.items || [];
+  }, [data]);
 
   const stats = useMemo(() => {
     let pending = 0;
@@ -61,8 +49,26 @@ const AdminDashboard = () => {
     };
   }, [complaints]);
 
-  if (loading) {
+  if (isLoading) {
     return <div className="py-20 flex items-center justify-center"><Loader /></div>;
+  }
+
+  if (isError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
+        <div className="p-4 bg-rose-100 text-rose-600 rounded-full">
+          <AlertCircle className="w-12 h-12" />
+        </div>
+        <h2 className="text-2xl font-bold text-slate-800">Failed to load data</h2>
+        <p className="text-slate-500 max-w-md text-center">{error?.message || 'A network error occurred.'}</p>
+        <button 
+          onClick={() => refetch()}
+          className="px-6 py-2 bg-slate-900 text-white rounded-xl shadow-md font-medium hover:bg-slate-800 transition-colors"
+        >
+          Try Again
+        </button>
+      </div>
+    );
   }
 
   return (
