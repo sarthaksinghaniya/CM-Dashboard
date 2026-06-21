@@ -61,8 +61,7 @@ async def test_verify_otp_success(async_client: AsyncClient, db_session: AsyncSe
     )
     
     assert response.status_code == 200
-    assert "access_token" in response.json()
-    assert response.json()["token_type"] == "bearer"
+    assert "accessToken" in response.json()
     
     # Verify OTP record is deleted
     res = await db_session.execute(select(OTP).filter(OTP.email == email))

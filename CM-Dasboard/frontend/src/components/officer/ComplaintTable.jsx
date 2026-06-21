@@ -40,7 +40,7 @@ const ComplaintTable = ({ complaints }) => {
               complaints.map((complaint) => (
                 <tr key={complaint.id || complaint.ticket_id} className="hover:bg-slate-50/80 transition-colors group">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-slate-900">
-                    #{complaint.id || complaint.ticket_id}
+                    #{complaint.ticket_id || complaint.id}
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm font-semibold text-slate-900 line-clamp-1">{complaint.title || 'Untitled'}</div>
@@ -66,7 +66,7 @@ const ComplaintTable = ({ complaints }) => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button
-                      onClick={() => navigate(`/officer/${complaint.id || complaint.ticket_id}`)}
+                      onClick={() => navigate(`/admin/complaints/${complaint.ticket_id || complaint.id}`)}
                       className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 text-slate-700 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 rounded-lg transition-all shadow-sm font-semibold opacity-0 group-hover:opacity-100 focus:opacity-100"
                     >
                       <Eye className="w-4 h-4" />

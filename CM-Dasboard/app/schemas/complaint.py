@@ -73,6 +73,9 @@ class ComplaintTrackingResponse(BaseModel):
     category: str
     department: str
     district: str
+    title: str
+    description: Optional[str] = None
+    assigned_officer: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     attachments: List[ComplaintAttachmentSchema] = []

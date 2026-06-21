@@ -1,20 +1,51 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams, Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import api from '../services/api';
 import { useSubmitFeedback } from '../services/queries';
 import { motion, AnimatePresence } from 'framer-motion';
 import AnimatedPage from '../components/AnimatedPage';
-import { Star, MessageSquareHeart, CheckCircle2, ArrowRight, AlertCircle } from 'lucide-react';
+import { Star, MessageSquareHeart, CheckCircle2, ArrowRight, AlertCircle, FileSpreadsheet } from 'lucide-react';
 
 const Feedback = () => {
+  const [searchParams] = useSearchParams();
+  const urlTicketId = searchParams.get('ticket_id');
+
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [comments, setComments] = useState('');
+  const [ticketId, setTicketId] = useState(urlTicketId || '');
   const [localError, setLocalError] = useState(null);
   const [success, setSuccess] = useState(false);
+
+  // Fetch complaints to find resolved ones if ticket_id is not in URL
+  const { data: complaints = [], isLoading } = useQuery({
+    queryKey: ['myComplaints'],
+    queryFn: async () => {
+      const res = await api.get('/complaints/my-complaints');
+      return res.data;
+    },
+    enabled: !urlTicketId
+  });
+
+  const resolvedComplaints = complaints.filter(
+    (c) => c.status?.toUpperCase() === 'RESOLVED'
+  );
+
+  useEffect(() => {
+    if (urlTicketId) {
+      setTicketId(urlTicketId);
+    }
+  }, [urlTicketId]);
 
   const { mutateAsync: submitFeedback, isPending: loading } = useSubmitFeedback();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!ticketId.trim()) {
+      setLocalError('Please select or enter a Ticket ID.');
+      return;
+    }
     if (rating === 0) {
       setLocalError('Please select a rating before submitting.');
       return;
@@ -22,11 +53,11 @@ const Feedback = () => {
 
     setLocalError(null);
     try {
-      await submitFeedback({ rating, comments });
+      await submitFeedback({ ticket_id: ticketId.trim(), rating, remarks: comments });
       setSuccess(true);
     } catch (error) {
       console.error('Failed to submit feedback', error);
-      setLocalError('Failed to submit feedback. Please try again.');
+      setLocalError(error.message || 'Failed to submit feedback. Please try again.');
     }
   };
 
@@ -68,7 +99,7 @@ const Feedback = () => {
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.2 }}
-          className="relative bg-white/60 backdrop-blur-xl border border-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-2xl p-8 md:p-10 overflow-hidden text-center"
+          className="relative bg-white/60 backdrop-blur-xl border border-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-2xl p-8 md:p-10 overflow-hidden"
         >
           <AnimatePresence mode="wait">
             {success ? (
@@ -78,7 +109,7 @@ const Feedback = () => {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ type: "spring", stiffness: 200, damping: 20 }}
-                className="py-8 space-y-6"
+                className="py-8 space-y-6 text-center"
               >
                 <motion.div 
                   initial={{ scale: 0 }} 
@@ -93,7 +124,7 @@ const Feedback = () => {
                   <p className="text-slate-500 mt-2 font-medium">Your feedback has been successfully submitted.</p>
                 </div>
                 <button
-                  onClick={() => { setSuccess(false); setRating(0); setComments(''); }}
+                  onClick={() => { setSuccess(false); setRating(0); setComments(''); if(!urlTicketId) setTicketId(''); }}
                   className="mt-8 w-full py-3.5 px-4 bg-white text-slate-700 font-bold rounded-xl border border-slate-200 shadow-sm hover:bg-slate-50 hover:shadow transition-all duration-200 active:scale-[0.98]"
                 >
                   Submit Another Response
@@ -106,7 +137,7 @@ const Feedback = () => {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 20 }}
                 onSubmit={handleSubmit} 
-                className="space-y-8"
+                className="space-y-6"
               >
                 {localError && (
                   <motion.div 
@@ -114,13 +145,55 @@ const Feedback = () => {
                     animate={{ opacity: 1, y: 0 }}
                     className="bg-rose-50/90 backdrop-blur-sm text-rose-600 p-4 rounded-xl text-center font-medium border border-rose-100 flex items-center justify-center gap-2 shadow-sm"
                   >
-                    <AlertCircle className="w-5 h-5" />
-                    {localError}
+                    <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                    <span>{localError}</span>
                   </motion.div>
                 )}
 
+                {/* Ticket ID selection */}
+                <div className="space-y-1.5 group">
+                  <label className="text-sm font-semibold text-slate-700 ml-1 group-focus-within:text-rose-500 transition-colors">
+                    Complaint Ticket ID
+                  </label>
+                  {urlTicketId ? (
+                    <input
+                      type="text"
+                      readOnly
+                      value={ticketId}
+                      className="w-full px-4 py-3.5 bg-slate-100 border border-slate-200 rounded-xl outline-none transition-all shadow-sm font-bold text-slate-500 cursor-not-allowed"
+                    />
+                  ) : resolvedComplaints.length > 0 ? (
+                    <select
+                      value={ticketId}
+                      onChange={(e) => setTicketId(e.target.value)}
+                      className="w-full px-4 py-3.5 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-rose-500/10 focus:border-rose-400 outline-none transition-all duration-300 shadow-sm text-slate-800 font-medium"
+                    >
+                      <option value="">-- Select Resolved Complaint --</option>
+                      {resolvedComplaints.map((c) => (
+                        <option key={c.ticket_id} value={c.ticket_id}>
+                          {c.ticket_id} - {c.category} ({c.district})
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="space-y-3">
+                      <input
+                        type="text"
+                        required
+                        placeholder="Enter Ticket ID (e.g. DL-2026-ABCDEF)"
+                        value={ticketId}
+                        onChange={(e) => setTicketId(e.target.value)}
+                        className="w-full px-4 py-3.5 bg-white/80 border border-slate-200 rounded-xl focus:ring-4 focus:ring-rose-500/10 focus:border-rose-400 outline-none transition-all duration-300 shadow-sm placeholder:text-slate-400 text-slate-800 font-medium"
+                      />
+                      <p className="text-xs text-slate-400 ml-1 font-medium">
+                        No resolved complaints found automatically. You can enter your ticket ID manually.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
                 {/* Star Rating Section */}
-                <div className="space-y-5 bg-white/50 p-6 rounded-2xl border border-white/60 shadow-inner">
+                <div className="space-y-5 bg-white/50 p-6 rounded-2xl border border-white/60 shadow-inner text-center">
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-widest block">Rate your experience</label>
                   <div className="flex justify-center gap-3">
                     {[1, 2, 3, 4, 5].map((star) => (
@@ -162,10 +235,10 @@ const Feedback = () => {
 
                 <motion.button 
                   type="submit" 
-                  whileTap={{ scale: rating === 0 ? 1 : 0.98 }}
-                  disabled={rating === 0 || loading}
+                  whileTap={{ scale: rating === 0 || !ticketId ? 1 : 0.98 }}
+                  disabled={rating === 0 || !ticketId || loading}
                   className={`group w-full flex items-center justify-center gap-2 py-4 mt-8 font-bold rounded-xl shadow-lg transition-all duration-300 ${
-                    rating === 0 
+                    rating === 0 || !ticketId
                       ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' 
                       : loading 
                         ? 'bg-gradient-to-r from-rose-500 to-orange-500 text-white opacity-70 cursor-not-allowed'

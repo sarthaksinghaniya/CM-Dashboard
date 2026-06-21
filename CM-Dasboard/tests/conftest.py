@@ -19,8 +19,6 @@ TEST_SQLALCHEMY_DATABASE_URL = "sqlite+aiosqlite:///./test.db" if settings.USE_S
 engine = create_async_engine(TEST_SQLALCHEMY_DATABASE_URL, echo=False, poolclass=NullPool)
 TestingSessionLocal = async_sessionmaker(autocommit=False, autoflush=False, bind=engine, class_=AsyncSession, expire_on_commit=False)
 
-
-
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def setup_test_db():
     # Create test database tables
@@ -43,14 +41,15 @@ async def async_client() -> AsyncGenerator[AsyncClient, None]:
         async with TestingSessionLocal() as session:
             yield session
 
-    app.dependency_overrides[get_db] = override_get_db
+    fastapi_app = app.other_asgi_app if hasattr(app, "other_asgi_app") else app
+    fastapi_app.dependency_overrides[get_db] = override_get_db
     
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
         
     # Clear overrides
-    app.dependency_overrides.clear()
+    fastapi_app.dependency_overrides.clear()
 
 @pytest_asyncio.fixture
 async def create_test_user(db_session: AsyncSession):

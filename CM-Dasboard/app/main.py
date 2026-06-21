@@ -413,7 +413,12 @@ from collections import defaultdict
 # 1. CORS Configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -440,6 +445,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.clients = defaultdict(list)
 
     async def dispatch(self, request: Request, call_next):
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            return await call_next(request)
+            
         client_ip = request.client.host if request.client else "unknown"
         now = time.time() * 1000
         

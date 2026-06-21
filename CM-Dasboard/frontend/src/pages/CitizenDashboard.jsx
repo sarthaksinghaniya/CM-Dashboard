@@ -1,8 +1,9 @@
 import React, { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import api from '../services/api';
 import AnimatedPage from '../components/AnimatedPage';
-import { FileText, AlertCircle, Clock, CheckCircle } from 'lucide-react';
+import { FileText, AlertCircle, Clock, CheckCircle, MessageSquareQuote } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getSocket } from '../services/socket';
 import toast from 'react-hot-toast';
@@ -31,10 +32,22 @@ export default function CitizenDashboard() {
 
   const getStatusColor = (status) => {
     switch(status?.toLowerCase()) {
-      case 'resolved': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-      case 'in_progress': return 'bg-blue-100 text-blue-700 border-blue-200';
-      case 'rejected': return 'bg-rose-100 text-rose-700 border-rose-200';
-      default: return 'bg-amber-100 text-amber-700 border-amber-200';
+      case 'resolved': 
+      case 'completed':
+        return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+      case 'in_progress': 
+      case 'processing':
+        return 'bg-blue-100 text-blue-700 border-blue-200';
+      case 'rejected': 
+      case 'closed':
+      case 'failed':
+      case 'failed_final':
+      case 'escalated':
+        return 'bg-rose-100 text-rose-700 border-rose-200';
+      case 'assigned':
+        return 'bg-amber-100 text-amber-700 border-amber-200';
+      default: 
+        return 'bg-slate-100 text-slate-700 border-slate-200';
     }
   };
 
@@ -86,6 +99,16 @@ export default function CitizenDashboard() {
                     <span className="flex items-center gap-1.5"><Clock className="w-4 h-4"/> {new Date(c.created_at).toLocaleDateString()}</span>
                   </div>
                 </div>
+
+                {c.status?.toUpperCase() === 'RESOLVED' && (
+                  <Link
+                    to={`/dashboard/feedback?ticket_id=${c.ticket_id}`}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-xl font-bold transition-all text-sm self-start sm:self-center"
+                  >
+                    <MessageSquareQuote className="w-4 h-4" />
+                    Provide Feedback
+                  </Link>
+                )}
               </div>
             </motion.div>
           ))}

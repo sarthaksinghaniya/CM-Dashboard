@@ -32,7 +32,7 @@ async def run_escalation_check(db: AsyncSession) -> int:
     active_statuses = [
         ComplaintStatus.SUBMITTED,
         ComplaintStatus.ASSIGNED,
-        ComplaintStatus.IN_PROGRESS
+        ComplaintStatus.PROCESSING
     ]
     query = select(Complaint).filter(Complaint.status.in_(active_statuses))
     result = await db.execute(query)

@@ -28,7 +28,10 @@ const ComplaintDetail = () => {
       setLoading(true);
       const data = await trackComplaint(id);
       setComplaint(data);
-      setNewStatus(data.status || 'SUBMITTED');
+      let initialStatus = data.status || 'SUBMITTED';
+      if (initialStatus === 'PROCESSING') initialStatus = 'IN_PROGRESS';
+      if (initialStatus === 'CLOSED') initialStatus = 'REJECTED';
+      setNewStatus(initialStatus);
     } catch (err) {
       setError('Failed to fetch complaint details.');
     } finally {
@@ -39,7 +42,7 @@ const ComplaintDetail = () => {
   const handleUpdate = async () => {
     try {
       setUpdating(true);
-      await updateComplaintStatus(id, newStatus);
+      await updateComplaintStatus(id, newStatus, remarks);
       setComplaint({ ...complaint, status: newStatus });
       toast.success('Status updated successfully!');
     } catch (err) {
@@ -64,7 +67,7 @@ const ComplaintDetail = () => {
 
   const getStepStatus = (step) => {
     const statusOrder = ['SUBMITTED', 'ASSIGNED', 'IN_PROGRESS', 'RESOLVED'];
-    const current = statusOrder.indexOf(complaint.status?.toUpperCase());
+    const current = statusOrder.indexOf(complaint.status?.toUpperCase() === 'PROCESSING' ? 'IN_PROGRESS' : complaint.status?.toUpperCase() === 'CLOSED' ? 'RESOLVED' : complaint.status?.toUpperCase());
     const target = statusOrder.indexOf(step);
     if (target <= current) return 'completed';
     if (target === current + 1) return 'current';
@@ -192,9 +195,9 @@ const ComplaintDetail = () => {
 
             <button 
               onClick={handleUpdate}
-              disabled={updating || newStatus === complaint.status}
+              disabled={updating || newStatus === (complaint.status === 'PROCESSING' ? 'IN_PROGRESS' : complaint.status === 'CLOSED' ? 'REJECTED' : complaint.status)}
               className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold transition-all duration-200 ${
-                updating || newStatus === complaint.status 
+                updating || newStatus === (complaint.status === 'PROCESSING' ? 'IN_PROGRESS' : complaint.status === 'CLOSED' ? 'REJECTED' : complaint.status)
                   ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                   : 'bg-slate-900 text-white hover:bg-slate-800 shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:scale-[0.98]'
               }`}

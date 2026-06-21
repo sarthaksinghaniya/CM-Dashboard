@@ -3,6 +3,7 @@ import { useSubmitComplaint } from '../services/queries';
 import { FileText, ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AnimatedPage from '../components/AnimatedPage';
+import { useAuth } from '../context/AuthContext';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -18,9 +19,10 @@ const itemVariants = {
 };
 
 const Home = () => {
-  const [formData, setFormData] = useState({ title: '', description: '', district: '', department: '' });
+  const [formData, setFormData] = useState({ title: '', description: '', district: '', department: '', phone: '' });
   const [successData, setSuccessData] = useState(null);
   const [localError, setLocalError] = useState(null);
+  const { user } = useAuth();
 
   const { mutateAsync: submitComplaint, isPending: loading } = useSubmitComplaint();
 
@@ -28,10 +30,19 @@ const Home = () => {
     e.preventDefault();
     setLocalError(null);
     
+    const submissionData = new FormData();
+    submissionData.append('citizen_name', user?.name || 'Delhi Citizen');
+    submissionData.append('citizen_email', user?.email || 'citizen@example.com');
+    submissionData.append('citizen_phone', formData.phone);
+    submissionData.append('title', formData.title);
+    submissionData.append('description', formData.description);
+    submissionData.append('district', formData.district);
+    submissionData.append('category', formData.department);
+
     try {
-      const res = await submitComplaint(formData);
+      const res = await submitComplaint(submissionData);
       setSuccessData(res);
-      setFormData({ title: '', description: '', district: '', department: '' });
+      setFormData({ title: '', description: '', district: '', department: '', phone: '' });
     } catch (error) {
       // The error message is automatically parsed by our Axios interceptor!
       setLocalError(error.message || 'Failed to submit complaint. Please try again.');
@@ -144,6 +155,19 @@ const Home = () => {
                     required
                     placeholder="Brief summary of the issue"
                     value={formData.title}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3.5 bg-white/80 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all duration-300 shadow-sm hover:bg-white placeholder:text-slate-400 font-medium text-slate-800"
+                  />
+                </motion.div>
+
+                <motion.div variants={itemVariants} className="space-y-1.5 group">
+                  <label className="text-sm font-semibold text-slate-700 ml-1 group-focus-within:text-blue-600 transition-colors">Contact Phone Number</label>
+                  <input
+                    type="tel"
+                    name="phone"
+                    required
+                    placeholder="Enter your 10-15 digit phone number (e.g., 9999999999)"
+                    value={formData.phone}
                     onChange={handleChange}
                     className="w-full px-4 py-3.5 bg-white/80 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all duration-300 shadow-sm hover:bg-white placeholder:text-slate-400 font-medium text-slate-800"
                   />

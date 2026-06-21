@@ -45,7 +45,7 @@ export const useUpdateComplaintStatus = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ id, status }) => api.updateComplaintStatus(id, status),
+    mutationFn: ({ id, status, remarks }) => api.updateComplaintStatus(id, status, remarks),
     onSuccess: (_, variables) => {
       // Invalidate both the list and the specific tracked complaint
       queryClient.invalidateQueries({ queryKey: ['complaints'] });

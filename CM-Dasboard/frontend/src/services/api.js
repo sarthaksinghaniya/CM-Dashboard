@@ -90,8 +90,8 @@ export const getOfficerComplaints = async (config = {}) => {
   return response.data;
 };
 
-export const updateComplaintStatus = async (id, status, config = {}) => {
-  const response = await api.patch(`/admin/complaints/${id}`, { status }, config);
+export const updateComplaintStatus = async (id, status, note = null, config = {}) => {
+  const response = await api.patch(`/admin/complaints/${id}`, { status, note }, config);
   return response.data;
 };
 

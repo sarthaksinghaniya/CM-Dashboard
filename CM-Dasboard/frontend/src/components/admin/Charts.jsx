@@ -132,7 +132,7 @@ const Charts = ({ complaints }) => {
                 stroke="#10b981" 
                 strokeWidth={3} 
                 dot={{ r: 4, strokeWidth: 2, fill: '#fff', stroke: '#10b981' }} 
-                activeDot={{ r: 6, strokeWidth: 0, fill: '#10b981', stroke: 'rgba(16, 185, 129, 0.3)', strokeWidth: 8 }} 
+                activeDot={{ r: 6, fill: '#10b981', stroke: 'rgba(16, 185, 129, 0.3)', strokeWidth: 8 }} 
               />
             </LineChart>
           </ResponsiveContainer>

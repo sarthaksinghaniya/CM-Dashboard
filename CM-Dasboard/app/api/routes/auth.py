@@ -34,7 +34,8 @@ async def request_otp(
     
     if otp_record and otp_record.attempts >= 5:
         # Check if 15 minute lockout window is still active
-        lockout_expiry = otp_record.created_at + timedelta(minutes=15)
+        otp_created_naive = otp_record.created_at.replace(tzinfo=None) if otp_record.created_at.tzinfo else otp_record.created_at
+        lockout_expiry = otp_created_naive + timedelta(minutes=15)
         if now < lockout_expiry:
             remaining_minutes = int((lockout_expiry - now).total_seconds() / 60) + 1
             raise HTTPException(
@@ -124,7 +125,8 @@ async def verify_otp(
     
     # 2. Check Lockout State
     if otp_record.attempts >= 5:
-        lockout_expiry = otp_record.created_at + timedelta(minutes=15)
+        otp_created_naive = otp_record.created_at.replace(tzinfo=None) if otp_record.created_at.tzinfo else otp_record.created_at
+        lockout_expiry = otp_created_naive + timedelta(minutes=15)
         if now < lockout_expiry:
             remaining_minutes = int((lockout_expiry - now).total_seconds() / 60) + 1
             raise HTTPException(
@@ -137,7 +139,8 @@ async def verify_otp(
             await db.commit()
             
     # 3. Check Expiry
-    if now > otp_record.expiry:
+    otp_expiry_naive = otp_record.expiry.replace(tzinfo=None) if otp_record.expiry.tzinfo else otp_record.expiry
+    if now > otp_expiry_naive:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="OTP verification code has expired. Please request a new code."

@@ -18,13 +18,14 @@ class ComplaintTrackingService:
         Returns None if not found or soft-deleted.
         """
         try:
-            # 1. Fetch complaint with preloaded attachments and updates
+            # 1. Fetch complaint with preloaded attachments, updates, and officer details
             stmt = (
                 select(Complaint)
                 .where(Complaint.ticket_id == ticket_id)
                 .options(
                     selectinload(Complaint.attachments),
-                    selectinload(Complaint.updates)
+                    selectinload(Complaint.updates),
+                    selectinload(Complaint.assigned_officer)
                 )
             )
             result = await db.execute(stmt)
@@ -74,6 +75,9 @@ class ComplaintTrackingService:
                 "category": complaint.category,
                 "department": complaint.department,
                 "district": complaint.district,
+                "title": complaint.title,
+                "description": complaint.description,
+                "assigned_officer": complaint.assigned_officer.name if complaint.assigned_officer else None,
                 "created_at": complaint.created_at,
                 "updated_at": complaint.updated_at,
                 "attachments": attachments,

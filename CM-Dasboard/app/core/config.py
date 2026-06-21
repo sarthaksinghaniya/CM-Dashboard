@@ -38,10 +38,14 @@ class Settings(BaseSettings):
 
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:
+        db_name = self.POSTGRES_DB
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            db_name = "cm_dashboard_test"
+            
         if self.USE_SQLITE.lower() == "true":
             return "sqlite+aiosqlite:///./test.db"
         # We enforce asyncpg for the database connection
-        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{db_name}"
 
     class Config:
         env_file = ".env"

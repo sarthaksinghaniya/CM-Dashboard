@@ -34,10 +34,16 @@ async def update_complaint_status(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(Admin))
 ):
+    status_str = payload.status.upper()
+    if status_str == "IN_PROGRESS":
+        status_str = "PROCESSING"
+    elif status_str == "REJECTED":
+        status_str = "CLOSED"
+
     try:
-        new_status = ComplaintStatus(payload.status.upper())
+        new_status = ComplaintStatus(status_str)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid status")
+        raise HTTPException(status_code=400, detail=f"Invalid status: {payload.status}")
 
     query = select(Complaint).filter(Complaint.ticket_id == ticket_id)
     result = await db.execute(query)
