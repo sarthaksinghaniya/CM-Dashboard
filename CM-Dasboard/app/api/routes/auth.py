@@ -190,3 +190,96 @@ async def verify_otp(
     )
     
     return Token(access_token=token, token_type="bearer")
+
+# --- Traditional Email/Password Auth ---
+
+from app.schemas.auth import SignupRequest, LoginRequest, UserResponse
+from app.api.deps import CurrentUser
+
+@router.post("/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def signup(
+    payload: SignupRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    email = payload.email.lower().strip()
+    
+    # Check if user exists
+    res = await db.execute(select(User).filter(User.email == email))
+    existing_user = res.scalars().first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A user with this email already exists."
+        )
+        
+    # Map string role to enum, default to CITIZEN if invalid
+    try:
+        user_role = RoleEnum(payload.role.upper())
+    except ValueError:
+        user_role = RoleEnum.CITIZEN
+        
+    # Create new user with hashed password
+    hashed_password = security.get_password_hash(payload.password)
+    user = User(
+        name=payload.name.title(),
+        email=email,
+        password=hashed_password,
+        role=user_role
+    )
+    
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    
+    return user
+
+@router.post("/login")
+async def login(
+    payload: LoginRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    email = payload.email.lower().strip()
+    
+    res = await db.execute(select(User).filter(User.email == email))
+    user = res.scalars().first()
+    
+    if not user or not user.password:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        
+    if not security.verify_password(payload.password, user.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    token = security.create_access_token(
+        subject=user.id,
+        email=user.email,
+        role=user.role.value,
+        expires_delta=access_token_expires
+    )
+    
+    return {
+        "token": token,
+        "user": {
+            "id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "role": user.role.value
+        }
+    }
+
+@router.get("/me", response_model=UserResponse)
+async def read_users_me(
+    current_user: CurrentUser
+):
+    """
+    Get current user profile based on JWT token.
+    """
+    return current_user

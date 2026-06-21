@@ -1,56 +1,57 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from typing import List
+from pydantic import BaseModel
 
-from app.api.deps import CurrentUser, get_db, require_role, Officer
+from app.api.deps import get_db, require_role, Admin
 from app.models.complaint import Complaint, ComplaintStatus
 from app.models.complaint_update import ComplaintUpdate
 from app.services.storage.attachment import AttachmentService
 from app.schemas.complaint import Complaint as ComplaintSchema
-
 from app.models.user import User
 
 router = APIRouter()
 
+class StatusUpdateRequest(BaseModel):
+    status: str
+    note: str = None
+
 @router.get("/complaints", response_model=List[ComplaintSchema])
-async def get_assigned_complaints(
+async def get_all_complaints(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(Officer))
+    current_user: User = Depends(require_role(Admin))
 ):
-    query = select(Complaint).filter(Complaint.assigned_to == current_user.id)
+    # Admins can see all complaints
+    query = select(Complaint).order_by(Complaint.created_at.desc())
     result = await db.execute(query)
     return result.scalars().all()
 
-@router.put("/complaints/{ticket_id}/status")
+@router.patch("/complaints/{ticket_id}")
 async def update_complaint_status(
     ticket_id: str,
-    status_update: str = Form(...),
-    note: str = Form(None),
+    payload: StatusUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(Officer))
+    current_user: User = Depends(require_role(Admin))
 ):
     try:
-        new_status = ComplaintStatus(status_update.upper())
+        new_status = ComplaintStatus(payload.status.upper())
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid status")
 
-    query = select(Complaint).filter(
-        Complaint.ticket_id == ticket_id,
-        Complaint.assigned_to == current_user.id
-    )
+    query = select(Complaint).filter(Complaint.ticket_id == ticket_id)
     result = await db.execute(query)
     complaint = result.scalars().first()
 
     if not complaint:
-        raise HTTPException(status_code=404, detail="Complaint not found or not assigned to you")
+        raise HTTPException(status_code=404, detail="Complaint not found")
 
     complaint.status = new_status
 
     db_update = ComplaintUpdate(
         complaint_id=complaint.id,
         status=new_status.value,
-        note=note or "Status updated by officer.",
+        note=payload.note or "Status updated by admin.",
         updated_by=current_user.id
     )
     db.add(db_update)
@@ -63,17 +64,14 @@ async def upload_proof(
     ticket_id: str,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(Officer))
+    current_user: User = Depends(require_role(Admin))
 ):
-    query = select(Complaint).filter(
-        Complaint.ticket_id == ticket_id,
-        Complaint.assigned_to == current_user.id
-    )
+    query = select(Complaint).filter(Complaint.ticket_id == ticket_id)
     result = await db.execute(query)
     complaint = result.scalars().first()
 
     if not complaint:
-        raise HTTPException(status_code=404, detail="Complaint not found or not assigned to you")
+        raise HTTPException(status_code=404, detail="Complaint not found")
 
     attach_rec = await AttachmentService.validate_and_upload(
         file=file,

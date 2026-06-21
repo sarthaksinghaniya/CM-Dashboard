@@ -1,15 +1,32 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { LayoutDashboard, FileText, Search, MessageSquare, Settings, LogOut, ShieldAlert } from 'lucide-react';
+import { LayoutDashboard, FileText, Search, MessageSquare, Settings, LogOut, ShieldAlert, BarChart3, ListTodo } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 const Sidebar = () => {
-  const navItems = [
-    { name: 'Dashboard', path: '/', icon: LayoutDashboard, end: true },
-    { name: 'Submit Complaint', path: '/submit', icon: FileText, end: false },
-    { name: 'Track Status', path: '/track', icon: Search, end: false },
-    { name: 'Feedback', path: '/feedback', icon: MessageSquare, end: false },
+  const { role, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const adminItems = [
+    { name: 'Admin Panel', path: '/admin', icon: LayoutDashboard, end: true },
+    { name: 'All Complaints', path: '/admin/complaints', icon: ListTodo, end: false },
+    { name: 'Analytics', path: '/admin/analytics', icon: BarChart3, end: false },
   ];
+
+  const citizenItems = [
+    { name: 'My Complaints', path: '/dashboard', icon: LayoutDashboard, end: true },
+    { name: 'Submit Complaint', path: '/dashboard/submit', icon: FileText, end: false },
+    { name: 'Track Status', path: '/dashboard/track', icon: Search, end: false },
+    { name: 'Feedback', path: '/dashboard/feedback', icon: MessageSquare, end: false },
+  ];
+
+  const navItems = role === 'admin' ? adminItems : citizenItems;
 
   return (
     <aside className="w-64 bg-slate-900 border-r border-slate-800 text-slate-300 flex flex-col h-full shrink-0 transition-all duration-300 shadow-xl hidden md:flex">
@@ -18,9 +35,14 @@ const Sidebar = () => {
           <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:shadow-indigo-500/40 transition-shadow">
             <ShieldAlert className="w-5 h-5 text-white" />
           </div>
-          <span className="font-bold text-[18px] tracking-tight group-hover:text-indigo-100 transition-colors">
-            GovConnect
-          </span>
+          <div className="flex flex-col">
+            <span className="font-bold text-[18px] tracking-tight group-hover:text-indigo-100 transition-colors leading-tight">
+              GovConnect
+            </span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-400">
+              {role === 'admin' ? 'Admin Portal' : 'Citizen Portal'}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -66,7 +88,7 @@ const Sidebar = () => {
           <Settings className="w-5 h-5 relative z-10 text-slate-500 group-hover:text-slate-300 transition-colors" />
           <span className="relative z-10">Settings</span>
         </button>
-        <button className="group relative flex items-center gap-3 px-3 py-3 w-full text-left rounded-xl font-medium text-slate-400 hover:text-rose-400 transition-colors duration-300">
+        <button onClick={handleLogout} className="group relative flex items-center gap-3 px-3 py-3 w-full text-left rounded-xl font-medium text-slate-400 hover:text-rose-400 transition-colors duration-300">
           <div className="absolute inset-0 bg-rose-500/0 group-hover:bg-rose-500/10 rounded-xl transition-colors duration-300" />
           <LogOut className="w-5 h-5 relative z-10 text-slate-500 group-hover:text-rose-400 transition-colors" />
           <span className="relative z-10">Logout</span>

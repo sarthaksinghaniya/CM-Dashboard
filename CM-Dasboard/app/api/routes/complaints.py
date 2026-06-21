@@ -283,3 +283,34 @@ async def track_complaint(
         )
 
     return tracking_data
+
+@router.get("/my-complaints", response_model=List[ComplaintTrackingResponse])
+async def get_my_complaints(
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(deps.require_role(deps.Citizen))
+):
+    """
+    Endpoint for citizens to fetch all their submitted complaints.
+    """
+    # In a real app, you might use current_user.email to filter or link citizen_email.
+    # We will assume current_user.email matches the citizen_email.
+    query = select(Complaint).filter(Complaint.citizen_email == current_user.email).order_by(Complaint.created_at.desc())
+    result = await db.execute(query)
+    complaints = result.scalars().all()
+    
+    # Transform to TrackingResponse format or similar for the frontend
+    tracking_data_list = []
+    for c in complaints:
+        tracking_data_list.append({
+            "ticket_id": c.ticket_id,
+            "status": c.status.value,
+            "category": c.category,
+            "department": c.department,
+            "priority": c.priority.value,
+            "created_at": c.created_at,
+            "assigned_to": c.assigned_to,
+            "citizen_name": c.citizen_name,
+            "district": c.district
+        })
+        
+    return tracking_data_list

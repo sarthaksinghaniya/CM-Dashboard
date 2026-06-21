@@ -91,22 +91,22 @@ export const submitComplaint = async (data, config = {}) => {
 };
 
 export const trackComplaint = async (id, config = {}) => {
-  const response = await api.get(`/complaints/${id}`, config);
+  const response = await api.get(`/complaints/track/${id}`, config);
   return response.data;
 };
 
 export const getOfficerComplaints = async (config = {}) => {
-  const response = await api.get('/complaints/', config);
+  const response = await api.get('/admin/complaints', config);
   return response.data;
 };
 
 export const updateComplaintStatus = async (id, status, config = {}) => {
-  const response = await api.patch(`/complaints/${id}`, { status }, config);
+  const response = await api.patch(`/admin/complaints/${id}`, { status }, config);
   return response.data;
 };
 
 export const getDashboardStats = async (config = {}) => {
-  const response = await api.get('/complaints/', config);
+  const response = await api.get('/admin/complaints', config);
   return response.data;
 };
 

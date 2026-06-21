@@ -1,7 +1,10 @@
 import React from 'react';
 import { Search, Bell, User, Menu } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 const Topbar = () => {
+  const { user } = useAuth();
+
   return (
     <header className="h-16 bg-white/70 backdrop-blur-md border-b border-slate-200/60 flex items-center justify-between px-6 shrink-0 shadow-[0_2px_10px_rgb(0,0,0,0.01)] z-20 sticky top-0">
       
@@ -36,8 +39,12 @@ const Topbar = () => {
             <User className="w-4 h-4" />
           </div>
           <div className="hidden md:block text-left">
-            <p className="text-sm font-bold text-slate-700 leading-tight group-hover:text-blue-600 transition-colors">Current User</p>
-            <p className="text-[11px] font-semibold text-slate-500 leading-tight">GovConnect ID</p>
+            <p className="text-sm font-bold text-slate-700 leading-tight group-hover:text-blue-600 transition-colors">
+              {user?.name || 'Loading...'}
+            </p>
+            <p className="text-[11px] font-semibold text-slate-500 leading-tight capitalize">
+              {user?.role || 'Guest'}
+            </p>
           </div>
         </button>
       </div>
