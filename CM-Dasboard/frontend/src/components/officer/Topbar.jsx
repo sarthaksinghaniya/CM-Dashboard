@@ -1,15 +1,19 @@
 import React from 'react';
-import { Search, Bell, User, Menu } from 'lucide-react';
+import { Search, User, Menu } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import NotificationBell from '../NotificationBell';
 
-const Topbar = () => {
+const Topbar = ({ onMenuToggle }) => {
   const { user } = useAuth();
 
   return (
     <header className="h-16 bg-white/70 backdrop-blur-md border-b border-slate-200/60 flex items-center justify-between px-6 shrink-0 shadow-[0_2px_10px_rgb(0,0,0,0.01)] z-20 sticky top-0">
       
-      {/* Mobile Menu Button (Visible only on mobile) */}
-      <button className="md:hidden mr-4 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+      {/* Mobile Menu Button */}
+      <button 
+        onClick={onMenuToggle}
+        className="md:hidden mr-4 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+      >
         <Menu className="w-6 h-6" />
       </button>
 
@@ -27,10 +31,7 @@ const Topbar = () => {
 
       {/* Right Actions */}
       <div className="flex items-center gap-5 ml-auto sm:ml-4">
-        <button className="relative p-2 text-slate-400 hover:text-slate-600 hover:bg-white rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-sm border border-transparent hover:border-slate-200/60">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white"></span>
-        </button>
+        <NotificationBell />
 
         <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
 
