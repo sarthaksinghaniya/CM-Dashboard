@@ -400,6 +400,70 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# -----------------------------------------------------------------------------
+# MIDDLEWARE & SECURITY (Helmet, CORS, Rate Limit)
+# -----------------------------------------------------------------------------
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi.responses import JSONResponse
+from fastapi import Request
+import time
+from collections import defaultdict
+
+# 1. CORS Configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 2. Security Headers (Helmet Alternative)
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
+
+# 3. Rate Limiting Middleware
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app, window_ms: int = 900000, max_requests: int = 100):
+        super().__init__(app)
+        self.window_ms = window_ms
+        self.max_requests = max_requests
+        self.clients = defaultdict(list)
+
+    async def dispatch(self, request: Request, call_next):
+        client_ip = request.client.host if request.client else "unknown"
+        now = time.time() * 1000
+        
+        # Clean old records
+        self.clients[client_ip] = [req_time for req_time in self.clients[client_ip] if now - req_time < self.window_ms]
+        
+        if len(self.clients[client_ip]) >= self.max_requests:
+            return JSONResponse(status_code=429, content={"msg": "Too many requests, try again later"})
+        
+        self.clients[client_ip].append(now)
+        return await call_next(request)
+
+app.add_middleware(RateLimitMiddleware)
+
+# 4. Global Error Handling Middleware
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Global Unhandled Error: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"msg": "Server Error"}
+    )
+
+
 app.include_router(complaints_router)
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
