@@ -2,82 +2,72 @@ import axios from 'axios';
 
 // --- Configuration ---
 const API_TIMEOUT = 10000; // 10 seconds
+const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
 
 const api = axios.create({
-  baseURL: 'http://127.0.0.1:8000',
+  baseURL: API_URL,
   timeout: API_TIMEOUT,
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true,
 });
 
 // --- Request Interceptor ---
 api.interceptors.request.use(
   (config) => {
-    // 1. Attach Auth Token securely
-    // In a real app, retrieve this from HttpOnly cookies or secure local storage
-    const token = localStorage.getItem('auth_token'); 
+    const token = localStorage.getItem('auth_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-
-    // 2. Logging in dev mode
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`[API Request] ${config.method.toUpperCase()} ${config.url}`, config.data || '');
-    }
-
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
 // --- Response Interceptor ---
 api.interceptors.response.use(
-  (response) => {
-    return response;
-  },
-  (error) => {
-    // 1. Handle Request Cancellation
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    
+    // Auto Refresh Logic
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      try {
+        const res = await axios.post(`${API_URL}/auth/refresh`, {}, { withCredentials: true });
+        const newToken = res.data.accessToken;
+        
+        localStorage.setItem('auth_token', newToken);
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        
+        return api(originalRequest);
+      } catch (refreshError) {
+        // Refresh failed, clear token to force logout
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('role');
+        return Promise.reject(refreshError);
+      }
+    }
+
     if (axios.isCancel(error)) {
-      console.log(`[API Request Canceled] ${error.message}`);
       return Promise.reject(new Error('Request was canceled.'));
     }
 
-    // 2. Parse errors into standard user-friendly format
     let errorMessage = 'An unexpected error occurred. Please try again.';
-
     if (!error.response) {
-      // Network error or Timeout
-      if (error.code === 'ECONNABORTED') {
-        errorMessage = 'Request timed out. Please check your internet connection.';
-      } else {
-        errorMessage = 'Unable to connect to the server. Please check your internet connection.';
-      }
+      errorMessage = error.code === 'ECONNABORTED' 
+        ? 'Request timed out. Please check your internet connection.'
+        : 'Unable to connect to the server. Please check your internet connection.';
     } else {
-      // Server responded with a status code outside of 2xx
-      const status = error.response.status;
       const data = error.response.data;
-
-      if (status === 401) {
-        errorMessage = 'Your session has expired. Please log in again.';
-        // Optionally trigger a logout action here
-      } else if (status === 403) {
-        errorMessage = 'You do not have permission to perform this action.';
-      } else if (status === 404) {
-        errorMessage = 'The requested resource was not found.';
-      } else if (status >= 500) {
-        errorMessage = 'Our servers are currently experiencing issues. Please try again later.';
-      } else if (data && data.detail) {
+      if (error.response.status === 403) errorMessage = 'You do not have permission to perform this action.';
+      else if (error.response.status >= 500) errorMessage = 'Our servers are experiencing issues. Please try later.';
+      else if (data && data.detail) {
         errorMessage = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
       }
     }
 
-    // 3. Log errors centrally
-    console.error(`[API Error] ${errorMessage}`, error);
-
-    // Reject with a standardized Error object
     return Promise.reject(new Error(errorMessage));
   }
 );

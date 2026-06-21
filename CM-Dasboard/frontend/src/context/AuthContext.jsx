@@ -35,14 +35,19 @@ export const AuthProvider = ({ children }) => {
   };
 
   const login = (data) => {
-    localStorage.setItem("auth_token", data.token);
+    localStorage.setItem("auth_token", data.accessToken);
     if (data.user?.role) {
       localStorage.setItem("role", data.user.role.toLowerCase());
     }
     setUser(data.user);
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch (e) {
+      console.error("Logout API failed, continuing local clear", e);
+    }
     localStorage.removeItem("auth_token");
     localStorage.removeItem("role");
     setUser(null);

@@ -1,7 +1,8 @@
 import secrets
 import logging
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
+from jose import jwt, JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.exc import IntegrityError
@@ -101,9 +102,10 @@ async def request_otp(
         
     return {"status": "success", "message": "OTP verification code dispatched to email."}
 
-@router.post("/verify-otp", response_model=Token)
+@router.post("/verify-otp")
 async def verify_otp(
     payload: OTPVerify,
+    response: Response,
     db: AsyncSession = Depends(get_db)
 ):
     email = payload.email.lower().strip()
@@ -189,7 +191,26 @@ async def verify_otp(
         expires_delta=access_token_expires
     )
     
-    return Token(access_token=token, token_type="bearer")
+    refresh_token = security.create_refresh_token(subject=user.id)
+    
+    response.set_cookie(
+        key="refreshToken",
+        value=refresh_token,
+        httponly=True,
+        secure=False, # Set True in prod
+        samesite="lax",
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+    )
+    
+    return {
+        "accessToken": token,
+        "user": {
+            "id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "role": user.role.value
+        }
+    }
 
 # --- Traditional Email/Password Auth ---
 
@@ -236,6 +257,7 @@ async def signup(
 @router.post("/login")
 async def login(
     payload: LoginRequest,
+    response: Response,
     db: AsyncSession = Depends(get_db)
 ):
     email = payload.email.lower().strip()
@@ -265,8 +287,19 @@ async def login(
         expires_delta=access_token_expires
     )
     
+    refresh_token = security.create_refresh_token(subject=user.id)
+    
+    response.set_cookie(
+        key="refreshToken",
+        value=refresh_token,
+        httponly=True,
+        secure=False, # Set True in prod
+        samesite="lax",
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+    )
+    
     return {
-        "token": token,
+        "accessToken": token,
         "user": {
             "id": user.id,
             "name": user.name,
@@ -283,3 +316,43 @@ async def read_users_me(
     Get current user profile based on JWT token.
     """
     return current_user
+
+@router.post("/refresh")
+async def refresh_token(request: Request, db: AsyncSession = Depends(get_db)):
+    token = request.cookies.get("refreshToken")
+    if not token:
+        raise HTTPException(status_code=401, detail="No refresh token found")
+        
+    try:
+        payload = jwt.decode(token, settings.REFRESH_SECRET_KEY, algorithms=[security.ALGORITHM])
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=403, detail="Invalid refresh token")
+    except JWTError:
+        raise HTTPException(status_code=403, detail="Invalid refresh token")
+        
+    import uuid
+    try:
+        user_uuid = uuid.UUID(user_id)
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Invalid user id in token")
+        
+    res = await db.execute(select(User).filter(User.id == user_uuid))
+    user = res.scalars().first()
+    
+    if not user:
+        raise HTTPException(status_code=403, detail="User not found")
+        
+    new_access_token = security.create_access_token(
+        subject=user.id,
+        email=user.email,
+        role=user.role.value,
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    
+    return {"accessToken": new_access_token}
+
+@router.post("/logout")
+async def logout(response: Response):
+    response.delete_cookie("refreshToken", httponly=True, samesite="lax")
+    return {"msg": "Logged out successfully"}
