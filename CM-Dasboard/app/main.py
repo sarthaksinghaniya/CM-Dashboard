@@ -43,6 +43,22 @@ from app.models.complaint_update import ComplaintUpdate
 from app.engines.routing import RoutingEngine
 from sqlalchemy.future import select
 
+import re
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.session import get_db
+
+from app.models.complaint import Complaint
+
+from app.services.ai.groq_rag import GroqRAG
+
+from app.schemas.rag import (
+    QueryRequest,
+    RAGResponse
+)
+
 # -----------------------------------------------------------------------------
 # DEPENDENCY INJECTION
 # -----------------------------------------------------------------------------
@@ -91,7 +107,6 @@ from app.services.routing.officer_router import OfficerRouter
 # ==========================================
 GROQ_CLASSIFIER_MODEL = "llama-3.1-8b-instant"
 GROQ_AGENT_MODEL = "openai/gpt-oss-120b"
-
 groq_api_key = os.getenv("GROQ_API_KEY")
 groq_client = Groq(api_key=groq_api_key) if groq_api_key else None
 if not groq_client:
@@ -141,81 +156,127 @@ async def classify_complaint(
             detail=f"Classification failed: {str(e)}"
         )
 
-# ==========================================
-# 2. COLD-START IMMUNE RAG QUERY ROUTE (FIXED DI INJECTION)
-# ==========================================
-@complaints_router.post("/rag/query", response_model=RAGResponse)
+@complaints_router.post(
+    "/rag/query",
+    response_model=RAGResponse
+)
 async def query_rag(
     request: QueryRequest,
-    service: ContextRetriever = Depends(get_rag_service) # Re-enabled production DI engine
+    db: AsyncSession = Depends(get_db),
+    service: ContextRetriever = Depends(get_rag_service)
 ):
-    """
-    RAG Route. Utilizes local ContextRetriever. Pre-renders the answer text 
-    and appends it safely as the first element of the context array payload 
-    to preserve downstream field compatibility with RAGResponse schema restrictions.
-    """
     try:
-        contexts = []
-        
-        # 1. Safely extract historical cases via your local retrieval service threadpool
-        if service:
-            try:
-                res = await asyncio.to_thread(service.get_context, request.query)
-                if res and "similar_cases" in res:
-                    contexts = [
-                        c.get("metadata", {}).get("text", "") 
-                        for c in res.get("similar_cases", []) 
-                        if c.get("metadata")
-                    ]
-            except Exception as retrieval_err:
-                logger.warning(f"[RAG_RETRIEVAL_WARN] Local vector store lookup skipped: {str(retrieval_err)}")
 
-        # 2. Mitigate cold starts by setting up fallback grounding text
-        if not contexts:
-            context_str = "No specific system procedures found in local FAISS memory store database (Index Cold Start State)."
-            logger.info("[RAG_ENGINE] Empty context state encountered. Shifting to standard grounding baseline.")
-        else:
-            context_str = "\n".join([f"- {c}" for c in contexts])
+        query = request.query.strip()
 
-        # 3. Assemble clear system operational boundaries for Gemini matching
-        system_instruction = (
-            "You are an expert AI operator managing the City & Facility Operations Dashboard.\n"
-            "Your job is to answer incoming queries or process citizen complaints using ONLY the factual context provided below.\n"
-            "If the provided context does not contain enough information, state clearly that the database is currently "
-            "empty, then provide a helpful, generalized resolution process for the citizen.\n"
-            "Do not invent system variables or operational histories.\n\n"
-            f"=== SYSTEM CONTEXT AND SOPS ===\n{context_str}"
+        ticket_match = re.search(
+            r"[A-Za-z0-9\-]+",
+            query
         )
 
-        if not ai_client:
-            raise HTTPException(status_code=500, detail="Gemini Engine API client is offline.")
+        if (
+            "status" in query.lower()
+            and ticket_match
+        ):
 
-        # 4. Generate the response text within a thread-isolated container lookahead
-        response = await asyncio.to_thread(
-            ai_client.models.generate_content,
-            model='gemini-2.5-flash',
-            contents=request.query,
-            config=types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                temperature=0.2,
+            ticket_id = ticket_match.group()
+
+            stmt = select(
+                Complaint
+            ).where(
+                Complaint.ticket_id == ticket_id,
+                Complaint.is_deleted == False
             )
+
+            result = await db.execute(stmt)
+
+            complaint = result.scalar_one_or_none()
+
+            if complaint:
+
+                return RAGResponse(
+                    answer=(
+                        f"Ticket ID: {complaint.ticket_id}\n"
+                        f"Status: {complaint.status}\n"
+                        f"Department: {complaint.department}\n"
+                        f"Category: {complaint.category}"
+                    ),
+                    sources=[]
+                )
+
+        retrieval = await asyncio.to_thread(
+            service.get_context,
+            query
         )
 
-        # 5. Fix Schema Filter Drop: Format generated text elements directly into context array payload
-        # This keeps the exact structure expected by your response model contract
-        response_payload = [f"GENERATED_ANSWER: {response.text}"] + contexts
+        similar_cases = retrieval.get(
+            "similar_cases",
+            []
+        )
+
+        contexts = []
+
+        for case in similar_cases:
+
+            metadata = case.get(
+                "metadata",
+                {}
+            )
+
+            text = metadata.get(
+                "text",
+                ""
+            )
+
+            decision = metadata.get(
+                "decision",
+                ""
+            )
+
+            outcome = metadata.get(
+                "outcome",
+                ""
+            )
+
+            combined = (
+                f"Complaint: {text}\n"
+                f"Decision: {decision}\n"
+                f"Outcome: {outcome}"
+            )
+
+            contexts.append(combined)
+
+        if not contexts:
+
+            contexts.append(
+                "No similar complaint history found."
+            )
+
+        rag = GroqRAG()
+
+        answer = await asyncio.to_thread(
+            rag.answer,
+            query,
+            contexts
+        )
 
         return RAGResponse(
-            context=response_payload
+            answer=answer,
+            sources=contexts
         )
 
     except Exception as e:
-        logger.error(f"[RAG_CRASH] Execution failure across processing pipelines: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Error during RAG retrieval and generation execution phase.")
 
+        logger.exception(
+            "RAG route failed"
+        )
 
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
 # ==========================================
-# 3. AGENT DECIDE ROUTE (FIXED DI INJECTION)
+# 3. AGENT DECIDE ROUTE 
 # ==========================================
 @complaints_router.post(
     "/agent/decide",

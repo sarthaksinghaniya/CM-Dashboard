@@ -118,6 +118,11 @@ async def submit_complaint(
     if not final_category or not final_category.strip():
         # Classify using fine-tuned model
         ml_res = ml_service.predict(description)
+
+        predicted_labels = ml_res.get(
+    "category_pred",
+    ["OTHER"]
+)
         predicted_labels = ml_res.get("category_pred", ["OTHER"])
         final_category = predicted_labels[0] if predicted_labels else "OTHER"
         confidence_score = ml_res.get("confidence_score", 0.5)
@@ -191,6 +196,24 @@ async def submit_complaint(
         db.add(db_update)
 
         await db.commit()
+        try:
+         from app.services.memory.complaint_ingestor import (
+        ingest_complaint
+    )
+
+         background_tasks.add_task(
+        ingest_complaint,
+        complaint_text=description,
+        category=final_category,
+        department=final_department,
+        status=initial_status.value
+    )
+
+        except Exception as ingest_err:
+         logger.error(
+        f"FAISS ingestion failed for {ticket_id}: {ingest_err}",
+        exc_info=True
+    )
     except Exception as e:
         # Rollback DB transaction
         await db.rollback()

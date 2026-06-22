@@ -13,13 +13,14 @@ class RAGQueryResponse(BaseModel):
 
 
 
+
 class QueryRequest(BaseModel):
     query: str
 
+
 class RAGResponse(BaseModel):
-    query: str
     answer: str
-    context: List[str]
+    sources: list[str] = []
 
 class MemorySearchResponse(BaseModel):
     incidents: List[Dict[str, Any]]

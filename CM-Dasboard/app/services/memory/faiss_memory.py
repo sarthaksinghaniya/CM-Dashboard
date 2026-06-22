@@ -3,6 +3,8 @@ import sys
 import logging
 import pickle
 from typing import List, Dict, Any
+from sentence_transformers import SentenceTransformer
+import numpy as np
 
 logger = logging.getLogger("cm_dashboard.services.memory.faiss")
 
@@ -19,6 +21,10 @@ class FaissMemory:
     ):
         self.index_path = index_path
         self.metadata_path = metadata_path
+
+        self.embedding_model = SentenceTransformer(
+    "sentence-transformers/all-MiniLM-L6-v2"
+)
         
         # Core storage variables initialized as None to delay import-time execution
         self._faiss_module = None
@@ -65,35 +71,78 @@ class FaissMemory:
         self._is_initialized = True
 
     def _initialize_empty_index(self):
-        """Builds an Inner Product Vector Space matching Gemini's 768-dimension structure."""
-        # Native dimension for text-embedding-004
-        dimension = 768 
-        self.index = self._faiss_module.IndexFlatIP(dimension)
-        self.metadata_store = {}
-        logger.info("[FAISS_MEMORY] Brand new vector index framework successfully initialized.")
 
-    def search_similar(self, query_text: str, top_k: int = 3) -> List[Dict[str, Any]]:
-        """
-        Safely searches for similar items. Initializes FAISS on demand,
-        preventing crashes during app startup.
-        """
-        # Trigger explicit lazy verification
-        try:
-            self._lazy_init_faiss()
-        except RuntimeError:
-            logger.warning("[FAISS_MEMORY] Search bypassed — storage runtime is offline.")
-            return []
+     dimension = 384
 
-        if not self.index or self.index.ntotal == 0:
-            return []
+     self.index = self._faiss_module.IndexFlatIP(
+        dimension
+     )
 
-        try:
-            # Fallback connection mapping logic using the Gemini engine we built in Sprint 1
-            from core_ai.vector_store import ProductionComplaintVectorStore
-            shared_store = ProductionComplaintVectorStore(self.index_path, self.metadata_path)
-            
-            # Utilize the production-hardened remote API embeddings call to fetch search matches
-            return shared_store.search_similar_complaints(query_text, top_k=top_k)
-        except Exception as exc:
-            logger.error(f"[FAISS_MEMORY] Similarity lookup failed: {str(exc)}", exc_info=True)
-            return []
+     self.metadata_store = {}
+
+     logger.info(
+        "[FAISS_MEMORY] Empty index created."
+    )
+
+    def search_similar(
+    self,
+    query_text: str,
+    top_k: int = 3
+):
+
+     try:
+        self._lazy_init_faiss()
+     except RuntimeError:
+        return []
+
+     if self.index.ntotal == 0:
+        return []
+
+     try:
+
+        embedding = self.embedding_model.encode(
+            [query_text],
+            normalize_embeddings=True
+        )
+
+        embedding = np.array(
+            embedding,
+            dtype=np.float32
+        )
+
+        distances, indices = self.index.search(
+            embedding,
+            top_k
+        )
+
+        results = []
+
+        for score, idx in zip(
+            distances[0],
+            indices[0]
+        ):
+
+            if idx == -1:
+                continue
+
+            metadata = self.metadata_store.get(
+                idx,
+                {}
+            )
+
+            results.append(
+                {
+                    "distance": float(score),
+                    "metadata": metadata
+                }
+            )
+
+        return results
+
+     except Exception as exc:
+
+        logger.exception(
+            "FAISS search failed"
+        )
+
+        return []
